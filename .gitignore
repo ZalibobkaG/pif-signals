@@ -1,0 +1,10 @@
+.env
+*.env
+tg_sessions/*
+!tg_sessions/.gitkeep
+logs/
+__pycache__/
+requirements*.txt
+example_of_current_trades.py
+.DS_Store
+**/.DS_Store

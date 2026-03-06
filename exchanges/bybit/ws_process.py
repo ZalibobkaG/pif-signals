@@ -13,28 +13,47 @@ from tg_bot.notify import send_message
 from pprint import pprint
 
 def _find_trade_by_order_id(trades_dict: dict, order_id: str, mapped_symbol: str):
-    """Найти трейд по orderId (entry / tp / sl)."""
+    """Найти трейд по orderId (entry / tp / sl). Логируем странные состояния вместо падения."""
     for msg_id, trade in trades_dict.items():
         if trade.get("coin") != mapped_symbol or trade.get("exchange") != "BYBIT":
             continue
-        entry = trade.get("entry", [])
-        entry_info = trade.get("entry_info")
-        if len(entry) == 1 and isinstance(entry_info, dict) and entry_info.get("ordId") == order_id:
-            return msg_id, trade
-        if len(entry) == 2 and isinstance(entry_info, list) and len(entry_info) >= 2:
-            if entry_info[0].get("ordId") == order_id or entry_info[1].get("ordId") == order_id:
-                return msg_id, trade
-        tp = trade.get("tp_info")
-        if tp is not None:
-            if isinstance(tp, dict) and tp.get("ordId") == order_id:
-                return msg_id, trade
-            if isinstance(tp, (list, tuple)):
-                for t in tp:
-                    if isinstance(t, dict) and t.get("ordId") == order_id:
+
+        try:
+            entry = trade.get("entry")
+            entry_info = trade.get("entry_info")
+
+            # Бывает, что entry уже None – логируем и не пытаемся брать len(None)
+            if entry:
+                if len(entry) == 1 and isinstance(entry_info, dict) and entry_info.get("ordId") == order_id:
+                    return msg_id, trade
+                if len(entry) == 2 and isinstance(entry_info, list) and len(entry_info) >= 2:
+                    if entry_info[0].get("ordId") == order_id or entry_info[1].get("ordId") == order_id:
                         return msg_id, trade
-        sl = trade.get("sl_info")
-        if isinstance(sl, dict) and sl.get("ordId") == order_id:
-            return msg_id, trade
+            else:
+                logging.debug("Bybit ws: trade %s has empty/None entry when matching orderId=%s: %r", msg_id, order_id, trade)
+
+            tp = trade.get("tp_info")
+            if tp is not None:
+                if isinstance(tp, dict) and tp.get("ordId") == order_id:
+                    return msg_id, trade
+                if isinstance(tp, (list, tuple)):
+                    for t in tp:
+                        if isinstance(t, dict) and t.get("ordId") == order_id:
+                            return msg_id, trade
+
+            sl = trade.get("sl_info")
+            if isinstance(sl, dict) and sl.get("ordId") == order_id:
+                return msg_id, trade
+
+        except Exception as e:
+            logging.exception(
+                "Bybit ws: error in _find_trade_by_order_id for msg_id=%s, order_id=%s, trade=%r",
+                msg_id,
+                order_id,
+                trade,
+            )
+            continue
+
     return None, None
 
 
@@ -53,6 +72,7 @@ async def ws_process(data: list, trades_dict: dict, bybit_trade: BybitTrade):
 
         trade_key, trade = _find_trade_by_order_id(trades_dict, order_id, symbol)
         if trade_key is None:
+            logging.debug("Bybit ws: no trade found for symbol=%s order_id=%s item=%r", symbol, order_id, item)
             continue
         effective_trade_info = trade
         instrument_info = trade.get("instrument_info")
