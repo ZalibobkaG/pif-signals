@@ -67,6 +67,11 @@ class OkxTrade:
     async def place_new_order(self, trades_dict: dict, instrument_id: str, trade_info: dict, instrument_info: tuple) -> bool:
         lot_size, ct_val, min_size, tick_size, max_leverage = instrument_info
         side = "buy" if trade_info["side"] == "long" else "sell"
+
+        if trade_info["entry"] == None:
+            logging.info(f"{instrument_id} OKX entry is None - Using current price")
+            entry = await self.get_curr_price(instrument_id)
+            trade_info["entry"] = [entry]
         
         if len(trade_info["entry"]) == 1:
             entry = trade_info["entry"][0]
