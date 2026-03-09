@@ -608,14 +608,24 @@ class BybitTrade:
         side = "Sell" if trade_info["side"] == "long" else "Buy"
         # triggerDirection: 2 = fall to trigger (long→sell), 1 = rise to trigger (short→buy)
         trigger_direction = 2 if trade_info["side"] == "long" else 1
+
+        # Делаем стоп лимитным, чтобы контролировать проскальзывание:
+        # - для лонга лимит чуть ниже триггера (sell stop)
+        # - для шорта лимит чуть выше триггера (buy stop)
+        if trade_info["side"] == "long":
+            limit_price = self.round_tick(sl_price * 0.999, tick_size)
+        else:
+            limit_price = self.round_tick(sl_price * 1.001, tick_size)
+
         try:
             res = await asyncio.to_thread(
                 self.trade_session.place_order,
                 category="linear",
                 symbol=instrument_id,
                 side=side,
-                orderType="Market",
+                orderType="Limit",
                 qty=str(self.round_tick(current_fill_size, qty_step)),
+                price=str(limit_price),
                 triggerPrice=str(sl_price),
                 triggerDirection=trigger_direction,
                 reduceOnly=True,
@@ -677,6 +687,12 @@ class BybitTrade:
             breakeven_price = self.round_tick(entry_price * 0.995, tick_size)
             new_trigger = self.round_tick(breakeven_price * 0.998, tick_size)
 
+        # Стоп теперь лимитный, поэтому вместе с triggerPrice двигаем и лимит-цену
+        if side_to_close == "Sell":
+            new_limit_price = self.round_tick(new_trigger * 0.999, tick_size)
+        else:
+            new_limit_price = self.round_tick(new_trigger * 1.001, tick_size)
+
         try:
             res = await asyncio.to_thread(
                 self.trade_session.amend_order,
@@ -684,6 +700,7 @@ class BybitTrade:
                 symbol=instrument_id,
                 orderId=sl_info["ordId"],
                 triggerPrice=str(new_trigger),
+                price=str(new_limit_price),
             )
         except Exception as e:
             logging.error("%s Bybit stop_breakeven amend_order error: %s", instrument_id, e)
