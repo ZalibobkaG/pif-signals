@@ -49,7 +49,7 @@ async def _process_root(
     root_id: int,
     root_data: Any,
     out: Dict[str, Dict[str, Any]],
-) -> None:
+    ) -> None:
     """
     Обрабатывает один root:
     - сначала root сообщение;

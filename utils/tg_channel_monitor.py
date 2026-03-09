@@ -55,7 +55,7 @@ class TgChannelMonitor:
         channel: str = "",
         messages_file: str = None,
         messages_queue: asyncio.Queue = None,
-    ):
+        ):
         self.api_id = api_id or int(os.environ.get("TG_API_ID", "0"))
         self.api_hash = api_hash or os.environ.get("TG_API_HASH", "")
         self.session_name = session_name or os.environ.get("TG_SESSION", "tg_session")
@@ -159,8 +159,10 @@ class TgChannelMonitor:
         
         # Обычная обработка (одна ссылка или нет ссылок) - проверяем processed_ids
         if not is_edit and msg.id in self.processed_ids:
+            logging.info("skip by processed_ids (new): msg.id=%s", msg.id)
             return
         if is_edit and msg.id not in self.processed_ids:
+            logging.info("skip by processed_ids (edit without base): msg.id=%s", msg.id)
             return
 
         # Обычная обработка (одна ссылка или нет ссылок)
