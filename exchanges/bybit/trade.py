@@ -133,12 +133,13 @@ class BybitTrade:
         """
         max_leverage, tick_size, min_order_qty, qty_step, min_notional_value = instrument_info
         side = "Buy" if trade_info["side"] == "long" else "Sell"
+
         if trade_info["entry"] == None:
             logging.info(f"{instrument_id} Bybit entry is None - Using current price")
             entry = await self.get_curr_price(instrument_id)
             trade_info["entry"] = [entry]
 
-        if len(trade_info["entry"]) == 1:
+        elif len(trade_info["entry"]) == 1:
             entry = trade_info["entry"][0]
             sl = trade_info["sl"]
             risk_percent = round(float(trade_info.get("risk", "1%").replace("%", "").strip()) * 0.95, 2)
@@ -209,7 +210,7 @@ class BybitTrade:
                 return False
             return True
 
-        elif len(trade_info["entry"]) == 2:
+        elif len(trade_info["entry"]) >= 2:
             e0, e1 = trade_info["entry"][0], trade_info["entry"][1]
             sl = trade_info["sl"]
             if trade_info["side"] == "long":

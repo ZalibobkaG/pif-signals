@@ -73,7 +73,7 @@ class OkxTrade:
             entry = await self.get_curr_price(instrument_id)
             trade_info["entry"] = [entry]
         
-        if len(trade_info["entry"]) == 1:
+        elif len(trade_info["entry"]) == 1:
             entry = trade_info["entry"][0]
             sl = trade_info["sl"]
             risk_percent = round(float(trade_info.get("risk", "1%").replace("%", "").strip()) * 0.95, 2)
@@ -144,7 +144,7 @@ class OkxTrade:
                 return False
             return True
 
-        elif len(trade_info["entry"]) == 2:
+        elif len(trade_info["entry"]) >= 2:
             e0, e1 = trade_info["entry"][0], trade_info["entry"][1]
             sl = trade_info["sl"]
             # Первый ордер: у long — большая цена, у short — меньшая. Расстояние до SL — там же, с учётом long/short.
