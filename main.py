@@ -21,9 +21,10 @@ _base_dir = os.path.dirname(os.path.abspath(__file__))
 _logs_dir = os.path.join(_base_dir, "logs")
 os.makedirs(_logs_dir, exist_ok=True)
 _log_file = os.path.join(_logs_dir, "logarik.log")
+_log_fmt = "{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} | {message}"
 logger.remove()
-logger.add(sys.stdout, format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>")
-logger.add(_log_file, encoding="utf-8", format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {message}")
+logger.add(sys.stdout, format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}:{function}:{line}</cyan> | <level>{message}</level>")
+logger.add(_log_file, encoding="utf-8", format=_log_fmt)
 
 from config import BALANCE
 from utils.tg_channel_monitor import TgChannelMonitor
