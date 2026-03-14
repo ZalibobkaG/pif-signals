@@ -1,8 +1,9 @@
 import asyncio
 import json
-import logging
 import os
 import sys
+
+from loguru import logger
 from pathlib import Path
 from typing import Dict, Any
 
@@ -60,7 +61,7 @@ async def _process_root(
     # В выходном JSON всегда храним по строковым ключам
     if isinstance(root_data, str):
         full_text = root_data
-        logging.info(f"Replaying root {root_id}")
+        logger.info(f"Replaying root {root_id}")
         ai_result = await ai.get_response(full_text)
         # Явно сохраняем message_id исходного сообщения
         if isinstance(ai_result, dict):
@@ -85,7 +86,7 @@ async def _process_root(
         parts.append(text)
         full_text = "\n\n---\n\n".join(parts)
 
-        logging.info(f"Replaying root {root_id}, msg {msg_id}")
+        logger.info(f"Replaying root {root_id}, msg {msg_id}")
         ai_result = await ai.get_response(full_text)
         if isinstance(ai_result, dict):
             ai_result.setdefault("message_id", msg_id)
@@ -110,14 +111,7 @@ async def main(limit: int = 30) -> None:
     load_dotenv()
 
     os.makedirs(LOGS_DIR, exist_ok=True)
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(message)s",
-        handlers=[
-            logging.FileHandler(os.path.join(LOGS_DIR, "replay_history_with_ai.log"), encoding="utf-8"),
-            logging.StreamHandler(),
-        ],
-    )
+    logger.add(os.path.join(LOGS_DIR, "replay_history_with_ai.log"), encoding="utf-8")
 
     history = _load_messages_history(limit=limit)
 
@@ -131,12 +125,12 @@ async def main(limit: int = 30) -> None:
         try:
             await _process_root(ai, root_id, root_data, out)
         except Exception as e:
-            logging.error(f"Error processing root {root_id}: {e}", exc_info=True)
+            logger.exception(f"Error processing root {root_id}: {e}")
 
     with open(OUT_FILE, "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, indent=2)
 
-    logging.info(f"Saved AI results for {len(out)} roots to {OUT_FILE}")
+    logger.info(f"Saved AI results for {len(out)} roots to {OUT_FILE}")
 
 
 if __name__ == "__main__":

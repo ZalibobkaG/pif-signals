@@ -1,24 +1,14 @@
 from asyncio import Queue
 import asyncio
-import logging
 import os as _os
+
+from loguru import logger
 
 from exchanges.okx.trade import OkxTrade
 from exchanges.bybit.trade import BybitTrade
 from exchanges.okx.ws_process import ws_process
 from tg_bot import context as tg_context
 from tg_bot.notify import send_message, send_ai_signal
-
-_logs_dir = _os.path.normpath(_os.path.join(_os.path.dirname(__file__), "..", "..", "logs"))
-_os.makedirs(_logs_dir, exist_ok=True)
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(message)s',
-    handlers=[
-        logging.FileHandler(_os.path.join(_logs_dir, "logarik.log"), encoding="utf-8"),
-        logging.StreamHandler(),
-    ],
-)
 
 
 async def okx_strategy_pool(ai_response_queue: Queue, user_choice_queue: Queue, trades_dict: dict, bybit_queue: Queue = None, okx_trade: OkxTrade = None, bybit_trade: BybitTrade = None, okx_ws_queue: Queue = None):
@@ -34,11 +24,11 @@ async def okx_strategy_pool(ai_response_queue: Queue, user_choice_queue: Queue, 
                     new_order = ai_response_queue.get_nowait()
                 except asyncio.QueueEmpty:
                     break
-                logging.info(f" ✅ okx_strategy_pool: new_order: {new_order}")
+                logger.info(f" ✅ okx_strategy_pool: new_order: {new_order}")
                 if isinstance(new_order, dict):
                     await send_ai_signal(new_order)
         except Exception as e:
-            logging.exception("okx_strategy_pool send_ai_signal: %s", e)
+            logger.exception("okx_strategy_pool send_ai_signal: %s", e)
 
         try:
             cb_id, choice = user_choice_queue.get_nowait()
@@ -47,20 +37,20 @@ async def okx_strategy_pool(ai_response_queue: Queue, user_choice_queue: Queue, 
         if cb_id is not None and choice is not None:
             new_order = tg_context.pending_ai_results.pop(cb_id, None)
             if choice != "post":
-                logging.info(" ⏭️ Пользователь выбрал «Пропустить»")
+                logger.info(" ⏭️ Пользователь выбрал «Пропустить»")
             elif new_order is None:
-                logging.warning(" ⏭️ Нет данных по callback_id %s", cb_id)
+                logger.warning(" ⏭️ Нет данных по callback_id %s", cb_id)
             else:
                 action = new_order.get("action")
                 message_id = new_order.get("message_id")
                 if not action:
-                    logging.warning(" ❌ AI response missing action: %r", new_order)
+                    logger.warning(" ❌ AI response missing action: %r", new_order)
                 else:
                     # Обработка действий, которые не требуют coin
                     if action == "info":
-                        logging.info(" ⛏️ OKX info - skip")
+                        logger.info(" ⛏️ OKX info - skip")
                     elif action == "help":
-                        logging.info(" 😣 OKX help")
+                        logger.info(" 😣 OKX help")
                     else:
                         coin = new_order.get("coin")
                         if coin:
@@ -70,7 +60,7 @@ async def okx_strategy_pool(ai_response_queue: Queue, user_choice_queue: Queue, 
                             if message_id in trades_dict:
                                 coin = trades_dict[message_id].get("coin")
                             if not coin:
-                                logging.warning(" ❌ AI response missing coin and message_id not in trades_dict: %r", new_order)
+                                logger.warning(" ❌ AI response missing coin and message_id not in trades_dict: %r", new_order)
                         if coin:
                             okx_coin = f"{coin[:-4]}-{coin[-4:]}-SWAP"
                             if message_id not in trades_dict:
@@ -97,33 +87,33 @@ async def okx_strategy_pool(ai_response_queue: Queue, user_choice_queue: Queue, 
                                     # Уже есть сетап на Bybit по этой монете, пробуем увести новый на OKX
                                     available_info = await okx_trade.get_instrument_info(okx_coin)
                                     if available_info[0] is not None:
-                                        logging.info(f"{coin} already on BYBIT, route new order to OKX")
+                                        logger.info(f"{coin} already on BYBIT, route new order to OKX")
                                         new_order["exchange"] = "OKX"
                                         trades_dict[new_order["message_id"]] = new_order.copy()
                                         trades_dict[new_order["message_id"]]["instrument_info"] = available_info
                                     else:
-                                        logging.warning(f"{coin} has BYBIT trade but not listed on OKX, stay on BYBIT")
+                                        logger.warning(f"{coin} has BYBIT trade but not listed on OKX, stay on BYBIT")
                                         available_info = await bybit_trade.get_instrument_info(coin) if bybit_trade else (None, None, None, None)
                                         if available_info[0] is not None:
                                             new_order["exchange"] = "BYBIT"
                                             trades_dict[new_order["message_id"]] = new_order.copy()
                                             trades_dict[new_order["message_id"]]["instrument_info"] = available_info
                                         else:
-                                            logging.warning(f"{coin} not available on Bybit nor OKX")
+                                            logger.warning(f"{coin} not available on Bybit nor OKX")
                                 else:
                                     # Bybit основной, OKX вспомогательный
                                     available_info = await bybit_trade.get_instrument_info(coin) if bybit_trade else (None, None, None, None)
                                     if available_info[0] is not None:
-                                        logging.info(f"{coin} available on Bybit (primary)")
+                                        logger.info(f"{coin} available on Bybit (primary)")
                                         new_order["exchange"] = "BYBIT"
                                         trades_dict[new_order["message_id"]] = new_order.copy()
                                         trades_dict[new_order["message_id"]]["instrument_info"] = available_info
                                     else:
                                         available_info = await okx_trade.get_instrument_info(okx_coin)
                                         if available_info[0] is None:
-                                            logging.warning(f"{coin} not available on Bybit nor OKX")
+                                            logger.warning(f"{coin} not available on Bybit nor OKX")
                                         else:
-                                            logging.warning(f"{coin} not on Bybit - go to OKX")
+                                            logger.warning(f"{coin} not on Bybit - go to OKX")
                                             new_order["exchange"] = "OKX"
                                             trades_dict[new_order["message_id"]] = new_order.copy()
                                             trades_dict[new_order["message_id"]]["instrument_info"] = available_info
@@ -132,7 +122,7 @@ async def okx_strategy_pool(ai_response_queue: Queue, user_choice_queue: Queue, 
                                 # Обработка action на OKX
                                 if action == "place_new_order":
                                     if trades_dict[new_order["message_id"]].get("status") not in ["active", "closed", "cancelled", "filled"]:
-                                        logging.info(" ⛏️ OKX place_new_order")
+                                        logger.info(" ⛏️ OKX place_new_order")
                                         available_info = trades_dict[new_order["message_id"]]["instrument_info"]
                                         ok = await okx_trade.place_new_order(trades_dict=trades_dict, instrument_id=okx_coin, trade_info=new_order, instrument_info=available_info)
                                         if ok:
@@ -140,7 +130,7 @@ async def okx_strategy_pool(ai_response_queue: Queue, user_choice_queue: Queue, 
 
                                 elif action == "enter_now":
                                     if trades_dict[new_order["message_id"]].get("sl_info") is None:
-                                        logging.info(" ⛏️ OKX enter_now")
+                                        logger.info(" ⛏️ OKX enter_now")
                                         if len(trades_dict[new_order["message_id"]]["entry"]) == 1:
                                             await okx_trade.cancel_orders(trades_dict=trades_dict, instrument_id=okx_coin, ord_ids=[trades_dict[new_order["message_id"]]["entry_info"]["ordId"]])
                                         elif len(trades_dict[new_order["message_id"]]["entry"]) == 2:
@@ -152,12 +142,12 @@ async def okx_strategy_pool(ai_response_queue: Queue, user_choice_queue: Queue, 
                                 elif action == "stop_breakeven":
                                     if trades_dict[new_order["message_id"]].get("status") in ["active", "filled"]:
                                         if trades_dict[new_order["message_id"]].get("sl_info", None) is not None and trades_dict[new_order["message_id"]]["sl_info"].get("breakeven") is False:
-                                            logging.info(" ⛏️ OKX stop_breakeven")
+                                            logger.info(" ⛏️ OKX stop_breakeven")
                                             await okx_trade.stop_breakeven(trades_dict=trades_dict, instrument_id=okx_coin, trade_info=new_order, instrument_info=available_info)
 
                                 elif action == "cancel":
                                     if trades_dict[new_order["message_id"]].get("status") == "active":
-                                        logging.info(" ⛏️ OKX cancel")
+                                        logger.info(" ⛏️ OKX cancel")
                                         ord_ids = []
                                         if len(trades_dict[new_order["message_id"]]["entry"]) == 1:
                                             ord_ids.append(trades_dict[new_order["message_id"]]["entry_info"]["ordId"])
@@ -168,7 +158,7 @@ async def okx_strategy_pool(ai_response_queue: Queue, user_choice_queue: Queue, 
 
                                 elif action == "close_entire":
                                     if trades_dict[new_order["message_id"]].get("status") in ["filled", "partially_filled"]:
-                                        logging.info(" ⛏️ OKX close_entire")
+                                        logger.info(" ⛏️ OKX close_entire")
                                         available_info = trades_dict[new_order["message_id"]]["instrument_info"]
                                         ord_ids = [trades_dict[new_order["message_id"]]["sl_info"]["ordId"] if trades_dict[new_order["message_id"]].get("sl_info", None) else None]
                                         if len(trades_dict[new_order["message_id"]]["entry"]) == 2:
@@ -187,10 +177,10 @@ async def okx_strategy_pool(ai_response_queue: Queue, user_choice_queue: Queue, 
                                         if res:
                                             await okx_trade.cancel_orders(trades_dict=trades_dict, instrument_id=okx_coin, ord_ids=ord_ids)
                                         else:
-                                            logging.error(f"❌ {okx_coin} Error closing entire position okx_strategy_pool")
+                                            logger.error(f"❌ {okx_coin} Error closing entire position okx_strategy_pool")
 
                                 else:
-                                    logging.warning(" ❌ Unsupported action: %s", action)
+                                    logger.warning(" ❌ Unsupported action: %s", action)
 
                             elif message_id in trades_dict and trades_dict[new_order["message_id"]]["exchange"] == "BYBIT":
                                 await bybit_queue.put(new_order)

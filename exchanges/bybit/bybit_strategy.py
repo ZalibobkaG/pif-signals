@@ -1,23 +1,13 @@
 from asyncio import Queue
 import asyncio
-import logging
 import os as _os
+
+from loguru import logger
 
 from config import BALANCE
 from exchanges.bybit.trade import BybitTrade
 from exchanges.bybit.ws_process import ws_process
 from tg_bot.notify import send_message
-
-_logs_dir = _os.path.normpath(_os.path.join(_os.path.dirname(__file__), "..", "..", "logs"))
-_os.makedirs(_logs_dir, exist_ok=True)
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(message)s',
-    handlers=[
-        logging.FileHandler(_os.path.join(_logs_dir, "logarik.log"), encoding="utf-8"),
-        logging.StreamHandler(),
-    ],
-)
 
 
 async def bybit_strategy_pool(bybit_queue: Queue, trades_dict: dict, bybit_ws_queue: Queue = None, bybit_trade: BybitTrade = None):
@@ -40,7 +30,7 @@ async def bybit_strategy_pool(bybit_queue: Queue, trades_dict: dict, bybit_ws_qu
             new_order = None
 
         if new_order is not None:
-            logging.info(f" ✅ bybit_strategy_pool: new_order: {new_order}")
+            logger.info(f" ✅ bybit_strategy_pool: new_order: {new_order}")
             bybit_coin = new_order.get("coin")
             if bybit_coin:
                 bybit_coin = bybit_coin.upper()
@@ -52,14 +42,14 @@ async def bybit_strategy_pool(bybit_queue: Queue, trades_dict: dict, bybit_ws_qu
                 if message_id in trades_dict:
                     bybit_coin = trades_dict[message_id].get("coin")
                 if not bybit_coin:
-                    logging.warning(" ❌ Bybit: missing coin and message_id not in trades_dict: %r", new_order)
+                    logger.warning(" ❌ Bybit: missing coin and message_id not in trades_dict: %r", new_order)
                     bybit_coin = None
 
             if bybit_coin:
                 if message_id not in trades_dict:
                     available_info = await bybit_trade.get_instrument_info(bybit_coin)
                     if available_info[0] is None:
-                        logging.warning("%s not available on Bybit", bybit_coin)
+                        logger.warning("%s not available on Bybit", bybit_coin)
                     else:
                         new_order["exchange"] = "BYBIT"
                         trades_dict[message_id] = new_order.copy()
@@ -71,14 +61,14 @@ async def bybit_strategy_pool(bybit_queue: Queue, trades_dict: dict, bybit_ws_qu
 
                     if action == "place_new_order":
                         if trades_dict[message_id].get("status") not in ["active", "closed", "cancelled", "filled"]:
-                            logging.info(" ⛏️ BYBIT place_new_order")
+                            logger.info(" ⛏️ BYBIT place_new_order")
                             ok = await bybit_trade.place_new_order(trades_dict=trades_dict, instrument_id=symbol, trade_info=new_order, instrument_info=available_info)
                             if ok:
                                 await send_message(f"📌 Bybit: ордер по {bybit_coin} размещён")
 
                     elif action == "enter_now":
                         if trades_dict[message_id].get("sl_info") is None:
-                            logging.info(" ⛏️ BYBIT enter_now")
+                            logger.info(" ⛏️ BYBIT enter_now")
                             entry_info = trades_dict[message_id].get("entry_info")
                             if entry_info:
                                 if isinstance(entry_info, dict):
@@ -92,12 +82,12 @@ async def bybit_strategy_pool(bybit_queue: Queue, trades_dict: dict, bybit_ws_qu
                     elif action == "stop_breakeven":
                         if trades_dict[message_id].get("status") in ["active", "filled"]:
                             if trades_dict[message_id].get("sl_info") and trades_dict[message_id]["sl_info"].get("breakeven") is False:
-                                logging.info(" ⛏️ BYBIT stop_breakeven")
+                                logger.info(" ⛏️ BYBIT stop_breakeven")
                                 await bybit_trade.stop_breakeven(trades_dict=trades_dict, instrument_id=symbol, trade_info=new_order, instrument_info=available_info)
 
                     elif action == "cancel":
                         if trades_dict[message_id].get("status") == "active":
-                            logging.info(" ⛏️ BYBIT cancel")
+                            logger.info(" ⛏️ BYBIT cancel")
                             ord_ids = []
                             entry_info = trades_dict[message_id].get("entry_info")
                             if isinstance(entry_info, dict):
@@ -111,7 +101,7 @@ async def bybit_strategy_pool(bybit_queue: Queue, trades_dict: dict, bybit_ws_qu
 
                     elif action == "close_entire":
                         if trades_dict[message_id].get("status") in ["filled", "partially_filled"]:
-                            logging.info(" ⛏️ BYBIT close_entire")
+                            logger.info(" ⛏️ BYBIT close_entire")
                             ord_ids = []
                             sl_info = trades_dict[message_id].get("sl_info")
                             if sl_info and sl_info.get("ordId") != "bybit_position_sl":
@@ -132,9 +122,9 @@ async def bybit_strategy_pool(bybit_queue: Queue, trades_dict: dict, bybit_ws_qu
                                 await bybit_trade.cancel_orders(trades_dict=trades_dict, instrument_id=symbol, ord_ids=ord_ids)
 
                     elif action in ("info", "help"):
-                        logging.info(" ⛏️ BYBIT %s - skip", action)
+                        logger.info(" ⛏️ BYBIT %s - skip", action)
                     else:
-                        logging.warning(" ❌ Unsupported action: %s", action)
+                        logger.warning(" ❌ Unsupported action: %s", action)
 
         # 2. Обработка WS сообщений
         if bybit_ws_queue is not None:

@@ -1,4 +1,3 @@
-import logging
 import websockets
 import asyncio
 import json
@@ -7,16 +6,7 @@ import time
 import hashlib
 import os as _os
 
-_logs_dir = _os.path.normpath(_os.path.join(_os.path.dirname(__file__), "..", "..", "logs"))
-_os.makedirs(_logs_dir, exist_ok=True)
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[
-        logging.FileHandler(_os.path.join(_logs_dir, "logarik.log"), encoding="utf-8"),
-        logging.StreamHandler(),
-    ],
-)
+from loguru import logger
 
 
 class WebSocketClient:
@@ -41,7 +31,7 @@ class WebSocketClient:
             except Exception as e:
                 if not self.running:
                     break
-                logging.warning(f"❗️ Bybit private WS error: {e}, reconnecting in {self.reconnect_delay}s")
+                logger.warning(f"❗️ Bybit private WS error: {e}, reconnecting in {self.reconnect_delay}s")
                 await asyncio.sleep(self.reconnect_delay)
 
     async def subscribe_private(self):
@@ -50,7 +40,7 @@ class WebSocketClient:
             "args": ["position", "order"],
         }
         await self.private_ws.send(json.dumps(msg))
-        logging.info("✅ Bybit subscribed to private position & order")
+        logger.info("✅ Bybit subscribed to private position & order")
 
     async def login(self):
         """
@@ -75,7 +65,7 @@ class WebSocketClient:
             # Успешный ответ auth
             if data.get("op") == "auth":
                 if data.get("success") is True:
-                    logging.info("✅ Bybit private WS auth successful")
+                    logger.info("✅ Bybit private WS auth successful")
                     break
                 raise Exception(f"❗️ Bybit auth failed: {data}")
 
@@ -86,7 +76,7 @@ class WebSocketClient:
             if topic in ("position", "order"):
                 payload = data.get("data", [])
                 if payload:
-                    logging.info(f"🌂🌂🌂 Bybit WS update {topic}: {payload}")
+                    logger.info(f"🌂🌂🌂 Bybit WS update {topic}: {payload}")
                     await self.orders_queue.put(data)
 
     async def start(self):
@@ -95,10 +85,10 @@ class WebSocketClient:
             self.private_task = asyncio.create_task(self.connect_private())
             await self.private_task
         except Exception as e:
-            logging.warning(e)
+            logger.warning(e)
 
     async def shutdown(self):
-        logging.info("🌀 Shutting down Bybit WebSocket client...")
+        logger.info("🌀 Shutting down Bybit WebSocket client...")
         self.running = False
         if self.private_ws:
             await self.private_ws.close()
@@ -108,7 +98,7 @@ class WebSocketClient:
                 await self.private_task
             except asyncio.CancelledError:
                 pass
-        logging.info("✅ Bybit WebSocket client stopped")
+        logger.info("✅ Bybit WebSocket client stopped")
 
 
 if __name__ == "__main__":
@@ -119,7 +109,7 @@ if __name__ == "__main__":
         api_key = os.getenv("BYBIT_API_KEY", "")
         api_secret = os.getenv("BYBIT_API_SECRET", "")
         if not api_key or not api_secret:
-            logging.error("BYBIT_API_KEY / BYBIT_API_SECRET are not set in environment")
+            logger.error("BYBIT_API_KEY / BYBIT_API_SECRET are not set in environment")
             return
 
         orders_queue: asyncio.Queue = asyncio.Queue()
@@ -134,7 +124,7 @@ if __name__ == "__main__":
         consumer_task = asyncio.create_task(_consumer())
 
         try:
-            logging.info("⏱ Bybit WS test: running for 60 seconds...")
+            logger.info("⏱ Bybit WS test: running for 60 seconds...")
             await asyncio.sleep(60)
         finally:
             await ws_client.shutdown()

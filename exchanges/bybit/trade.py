@@ -1,22 +1,11 @@
-import logging
 import os
 import asyncio
 import math
+import time
 from pybit.unified_trading import HTTP
 from pprint import pprint
-import time
 
-logging.basicConfig(level=logging.INFO)
-_logs_dir = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", "logs"))
-os.makedirs(_logs_dir, exist_ok=True)
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(message)s',
-    handlers=[
-        logging.FileHandler(os.path.join(_logs_dir, "logarik.log"), encoding="utf-8"),
-        logging.StreamHandler()
-    ]
-)
+from loguru import logger
 class BybitTrade:
     def __init__(self, api_key, api_secret, balance: float = 100.0):
         self.api_key = api_key
@@ -57,14 +46,14 @@ class BybitTrade:
             )
             
             if res.get("retCode") != 0:
-                logging.warning(f"Bybit API error: {res.get('retMsg')}")
+                logger.warning(f"Bybit API error: {res.get('retMsg')}")
                 return None, None, None, None, None
             
             result = res.get("result", {})
             instruments_list = result.get("list", [])
             
             if not instruments_list:
-                logging.warning(f"Instrument {symbol} not found on Bybit")
+                logger.warning(f"Instrument {symbol} not found on Bybit")
                 return None, None, None, None, None
             
             # Берём первый инструмент из списка
@@ -83,7 +72,7 @@ class BybitTrade:
             # Минимальный notional в квоте (USDT) — minNotionalValue для linear
             min_notional_value = float(lot_size_filter.get("minNotionalValue", "0")) if lot_size_filter else 0.0
             
-            logging.info(
+            logger.info(
                 "Bybit %s: max_leverage=%s, tick_size=%s, min_order_qty=%s, qty_step=%s, min_notional_value=%s",
                 symbol,
                 max_leverage,
@@ -95,7 +84,7 @@ class BybitTrade:
             return max_leverage, tick_size, min_order_qty, qty_step, min_notional_value
             
         except Exception as e:
-            logging.exception(f"Error getting Bybit instrument info for {symbol}: {e}")
+            logger.exception(f"Error getting Bybit instrument info for {symbol}: {e}")
             return None, None, None, None, None
 
     async def set_leverage(self, symbol: str, leverage: int) -> bool:
@@ -114,16 +103,16 @@ class BybitTrade:
         except Exception as e:
             msg = str(e)
             if "110043" in msg or "leverage not modified" in msg:
-                logging.info("%s Bybit set_leverage: already %sx", symbol, leverage)
+                logger.info("%s Bybit set_leverage: already %sx", symbol, leverage)
                 return True
-            logging.info("❗️ Bybit set_leverage exception: %s", e)
+            logger.info("❗️ Bybit set_leverage exception: %s", e)
             return False
 
         code = res.get("retCode")
         if code == 0:
             return True
 
-        logging.info("❗️ Bybit API error (set_leverage): %s (%s)", res.get("retMsg"), code)
+        logger.info("❗️ Bybit API error (set_leverage): %s (%s)", res.get("retMsg"), code)
         return False
 
     async def place_new_order(self, trades_dict: dict, instrument_id: str, trade_info: dict, instrument_info: tuple) -> bool:
@@ -135,7 +124,7 @@ class BybitTrade:
         side = "Buy" if trade_info["side"] == "long" else "Sell"
 
         if trade_info["entry"] == None:
-            logging.info(f"{instrument_id} Bybit entry is None - Using current price")
+            logger.info(f"{instrument_id} Bybit entry is None - Using current price")
             entry = await self.get_curr_price(instrument_id)
             trade_info["entry"] = [entry]
 
@@ -163,7 +152,7 @@ class BybitTrade:
                 required_qty = min_notional_value / entry
                 required_qty = math.ceil(required_qty / qty_step) * qty_step
                 required_qty = max(required_qty, min_order_qty)
-                logging.info(
+                logger.info(
                     "%s Bybit place_new_order: nominal %.4f < min_notional_value %.4f, bump qty %.4f → %.4f",
                     instrument_id,
                     position_nominal_usd,
@@ -179,7 +168,7 @@ class BybitTrade:
             safe_leverage = min(max_leverage, max_leverage_by_liq, 20)
             leverage = int(max(1, round(safe_leverage)))
 
-            logging.info(f"{instrument_id} Bybit Position size: {qty}, Nominal: {position_nominal_usd:.2f} USD")
+            logger.info(f"{instrument_id} Bybit Position size: {qty}, Nominal: {position_nominal_usd:.2f} USD")
             await self.set_leverage(instrument_id, leverage)
 
             try:
@@ -203,10 +192,10 @@ class BybitTrade:
                     trades_dict[message_id]["status"] = "active"
                     trades_dict[message_id]["entry_info"] = {"ordId": ord_id, "price_filled": None, "size": qty, "size_filled": None, "status": "active"}
                     pprint(trades_dict[message_id], indent=2, width=80, sort_dicts=False)
-                    logging.info(f"✅ {instrument_id} Updated trades_dict[{message_id}] with entry_ordId: {ord_id}")
+                    logger.info(f"✅ {instrument_id} Updated trades_dict[{message_id}] with entry_ordId: {ord_id}")
 
             except Exception as e:
-                logging.error(f"{instrument_id} Error placing order: {e}")
+                logger.error(f"{instrument_id} Error placing order: {e}")
                 return False
             return True
 
@@ -245,7 +234,7 @@ class BybitTrade:
                     required_qty_first = min_notional_value / entry_first
                     required_qty_first = math.ceil(required_qty_first / qty_step) * qty_step
                     required_qty_first = max(required_qty_first, min_order_qty)
-                    logging.info(
+                    logger.info(
                         "%s Bybit place_new_order (2 entries): notional_first %.4f < min_notional_value %.4f, "
                         "bump qty_first %.4f → %.4f",
                         instrument_id,
@@ -261,7 +250,7 @@ class BybitTrade:
                     required_qty_second = min_notional_value / entry_second
                     required_qty_second = math.ceil(required_qty_second / qty_step) * qty_step
                     required_qty_second = max(required_qty_second, min_order_qty)
-                    logging.info(
+                    logger.info(
                         "%s Bybit place_new_order (2 entries): notional_second %.4f < min_notional_value %.4f, "
                         "bump qty_second %.4f → %.4f",
                         instrument_id,
@@ -279,7 +268,7 @@ class BybitTrade:
             max_leverage_by_liq = int(100 / price_gap)
             leverage = int(max(1, min(max_leverage, max_leverage_by_liq, 20)))
 
-            logging.info(f"{instrument_id} Bybit Two entries: first={entry_first}, second={entry_second}, qty_first={qty_first}, qty_second={qty_second}, leverage={leverage}x")
+            logger.info(f"{instrument_id} Bybit Two entries: first={entry_first}, second={entry_second}, qty_first={qty_first}, qty_second={qty_second}, leverage={leverage}x")
             await self.set_leverage(instrument_id, leverage)
 
             request = [
@@ -293,7 +282,7 @@ class BybitTrade:
                     category="linear",
                     request=request,
                 )
-                logging.info(f"{instrument_id} Bybit Batch orders placed: {res}")
+                logger.info(f"{instrument_id} Bybit Batch orders placed: {res}")
                 if res.get("retCode") == 0 and res.get("result"):
                     for item in res["result"].get("list", []):
                         if item.get("orderId"):
@@ -311,9 +300,9 @@ class BybitTrade:
                     ]
                     trades_dict[message_id]["status"] = "active"
                     pprint(trades_dict[message_id], indent=2, width=80, sort_dicts=False)
-                    logging.info(f"✅ {instrument_id} Updated trades_dict[{message_id}] with entry_ordId(s): {ord_ids}")
+                    logger.info(f"✅ {instrument_id} Updated trades_dict[{message_id}] with entry_ordId(s): {ord_ids}")
             except Exception as e:
-                logging.error(f"{instrument_id} Error placing two orders: {e}")
+                logger.error(f"{instrument_id} Error placing two orders: {e}")
                 return False
             return True
 
@@ -339,9 +328,9 @@ class BybitTrade:
                 if res.get("retCode") == 0 and res.get("result"):
                     tp_id = res["result"].get("orderId")
                     trade["tp_info"] = {"ordId": tp_id, "price_filled": None, "size": total_size, "size_filled": None, "status": "active"}
-                    logging.info(f"✅ {instrument_id} Bybit Updated trades_dict {trade_info['message_id']} with tp_ordId: {tp_id}")
+                    logger.info(f"✅ {instrument_id} Bybit Updated trades_dict {trade_info['message_id']} with tp_ordId: {tp_id}")
             except Exception as e:
-                logging.error(f"{instrument_id} Bybit Error placing tp limit order: {e}")
+                logger.error(f"{instrument_id} Bybit Error placing tp limit order: {e}")
                 return False
             return True
 
@@ -369,9 +358,9 @@ class BybitTrade:
                         {"ordId": ord_ids[0], "price_filled": None, "size": tp_first_size, "size_filled": None, "status": "active"},
                         {"ordId": ord_ids[1], "price_filled": None, "size": tp_second_size, "size_filled": None, "status": "active"},
                     ]
-                    logging.info(f"✅ {instrument_id} Bybit Updated trades_dict {trade_info['message_id']} with tp_ordId(s): {ord_ids}")
+                    logger.info(f"✅ {instrument_id} Bybit Updated trades_dict {trade_info['message_id']} with tp_ordId(s): {ord_ids}")
             except Exception as e:
-                logging.error(f"{instrument_id} Bybit Error placing tp batch orders: {e}")
+                logger.error(f"{instrument_id} Bybit Error placing tp batch orders: {e}")
                 return False
             return True
 
@@ -402,9 +391,9 @@ class BybitTrade:
                         {"ordId": ord_ids[1], "price_filled": None, "size": tp_second_size, "size_filled": None, "status": "active"},
                         {"ordId": ord_ids[2], "price_filled": None, "size": tp_third_size, "size_filled": None, "status": "active"},
                     ]
-                    logging.info(f"✅ {instrument_id} Bybit Updated trades_dict {trade_info['message_id']} with tp_ordId(s): {ord_ids}")
+                    logger.info(f"✅ {instrument_id} Bybit Updated trades_dict {trade_info['message_id']} with tp_ordId(s): {ord_ids}")
             except Exception as e:
-                logging.error(f"{instrument_id} Bybit Error placing tp batch orders (3): {e}")
+                logger.error(f"{instrument_id} Bybit Error placing tp batch orders (3): {e}")
                 return False
             return True
 
@@ -425,9 +414,9 @@ class BybitTrade:
                 )
                 if res.get("retCode") == 0:
                     trade["tp_info"]["size"] = total_size
-                    logging.info(f"✅ {instrument_id} Bybit Updated size of tp limit order")
+                    logger.info(f"✅ {instrument_id} Bybit Updated size of tp limit order")
             except Exception as e:
-                logging.error(f"{instrument_id} Bybit Error amending tp order: {e}")
+                logger.error(f"{instrument_id} Bybit Error amending tp order: {e}")
                 return False
             return True
 
@@ -448,9 +437,9 @@ class BybitTrade:
                 if res.get("retCode") == 0:
                     trade["tp_info"][0]["size"] = tp_first_size
                     trade["tp_info"][1]["size"] = tp_second_size
-                    logging.info(f"✅ {instrument_id} Bybit Updated sizes of tp limit orders")
+                    logger.info(f"✅ {instrument_id} Bybit Updated sizes of tp limit orders")
             except Exception as e:
-                logging.error(f"{instrument_id} Bybit Error amending tp batch orders: {e}")
+                logger.error(f"{instrument_id} Bybit Error amending tp batch orders: {e}")
                 return False
             return True
 
@@ -474,9 +463,9 @@ class BybitTrade:
                     trade["tp_info"][0]["size"] = tp_first_size
                     trade["tp_info"][1]["size"] = tp_second_size
                     trade["tp_info"][2]["size"] = tp_third_size
-                    logging.info(f"✅ {instrument_id} Bybit Updated sizes of tp limit orders (3)")
+                    logger.info(f"✅ {instrument_id} Bybit Updated sizes of tp limit orders (3)")
             except Exception as e:
-                logging.error(f"{instrument_id} Bybit Error amending tp batch orders (3): {e}")
+                logger.error(f"{instrument_id} Bybit Error amending tp batch orders (3): {e}")
                 return False
             return True
 
@@ -496,7 +485,7 @@ class BybitTrade:
                 return float(last_price) if last_price else 0.0
             return 0.0
         except Exception as e:
-            logging.exception(f"Bybit get_curr_price {symbol}: {e}")
+            logger.exception(f"Bybit get_curr_price {symbol}: {e}")
             return 0.0
     
     async def enter_now(self, trades_dict: dict, instrument_id: str, trade_info: dict, instrument_info: tuple) -> bool:
@@ -507,7 +496,7 @@ class BybitTrade:
 
         curr_price = await self.get_curr_price(instrument_id)
         if curr_price == 0:
-            logging.warning(f"{instrument_id} Bybit enter_now: curr_price=0")
+            logger.warning(f"{instrument_id} Bybit enter_now: curr_price=0")
             return False
 
         entry = curr_price
@@ -531,7 +520,7 @@ class BybitTrade:
             required_qty = min_notional_value / entry
             required_qty = math.ceil(required_qty / qty_step) * qty_step
             required_qty = max(required_qty, min_order_qty)
-            logging.info(
+            logger.info(
                 "%s Bybit enter_now: nominal %.4f < min_notional_value %.4f, bump qty %.4f → %.4f",
                 instrument_id,
                 position_nominal_usd,
@@ -547,7 +536,7 @@ class BybitTrade:
         safe_leverage = min(max_leverage, max_leverage_by_liq, 20)
         leverage = int(max(1, round(safe_leverage)))
 
-        logging.info(f"{instrument_id} Bybit enter_now: qty={qty}, nominal={position_nominal_usd:.2f} USD, leverage={leverage}x")
+        logger.info(f"{instrument_id} Bybit enter_now: qty={qty}, nominal={position_nominal_usd:.2f} USD, leverage={leverage}x")
         await self.set_leverage(instrument_id, leverage)
 
         try:
@@ -571,12 +560,12 @@ class BybitTrade:
                 if len(trade["entry"]) == 2:
                     trades_dict[message_id]["entry"].pop(-1)
                 trades_dict[message_id]["entry_info"] = {"ordId": ord_id, "price_filled": None, "size": qty, "size_filled": None, "status": "active"}
-                logging.info(f"✅ {instrument_id} Bybit entered now at {curr_price}, entry_ordId: {ord_id}")
+                logger.info(f"✅ {instrument_id} Bybit entered now at {curr_price}, entry_ordId: {ord_id}")
             else:
-                logging.warning(f"{instrument_id} Bybit enter_now API error: {res.get('retMsg')}")
+                logger.warning(f"{instrument_id} Bybit enter_now API error: {res.get('retMsg')}")
                 return False
         except Exception as e:
-            logging.error(f"{instrument_id} Bybit enter_now error: {e}")
+            logger.error(f"{instrument_id} Bybit enter_now error: {e}")
             return False
         return True
 
@@ -593,12 +582,12 @@ class BybitTrade:
             )
             print(res)
             if res.get("retCode") == 0:
-                logging.info(f"✅ {instrument_id} Bybit Cancelled orders {ord_ids}")
+                logger.info(f"✅ {instrument_id} Bybit Cancelled orders {ord_ids}")
                 return True
-            logging.error(f"{instrument_id} Bybit Error cancelling orders {ord_ids}: {res.get('retMsg')}")
+            logger.error(f"{instrument_id} Bybit Error cancelling orders {ord_ids}: {res.get('retMsg')}")
             return False
         except Exception as e:
-            logging.error(f"{instrument_id} Bybit Error cancelling orders {ord_ids}: {e}")
+            logger.error(f"{instrument_id} Bybit Error cancelling orders {ord_ids}: {e}")
             return False
 
     async def place_stop_loss_order(self, trades_dict: dict, instrument_id: str, trade_info: dict, instrument_info: tuple) -> bool:
@@ -646,12 +635,12 @@ class BybitTrade:
                     "status": "active",
                     "breakeven": False,
                 }
-                logging.info(f"✅ {instrument_id} Bybit stop loss (conditional) placed at {sl_price}, orderId={ord_id}")
+                logger.info(f"✅ {instrument_id} Bybit stop loss (conditional) placed at {sl_price}, orderId={ord_id}")
                 return True
-            logging.warning(f"{instrument_id} Bybit place_stop_loss_order failed: {res.get('retMsg')}")
+            logger.warning(f"{instrument_id} Bybit place_stop_loss_order failed: {res.get('retMsg')}")
             return False
         except Exception as e:
-            logging.error(f"{instrument_id} Bybit place_stop_loss_order error: {e}")
+            logger.error(f"{instrument_id} Bybit place_stop_loss_order error: {e}")
             return False
 
     async def stop_breakeven(self, trades_dict: dict, instrument_id: str, trade_info: dict, instrument_info: tuple) -> bool:
@@ -663,7 +652,7 @@ class BybitTrade:
         trade = trades_dict[trade_info["message_id"]]
         sl_info = trade.get("sl_info")
         if not sl_info:
-            logging.warning("%s Bybit stop_breakeven: no sl_info", instrument_id)
+            logger.warning("%s Bybit stop_breakeven: no sl_info", instrument_id)
             return False
 
         side_to_close = "Sell" if trade_info["side"] == "long" else "Buy"
@@ -680,7 +669,7 @@ class BybitTrade:
             if entry_list:
                 entry_price = float(entry_list[0])
             else:
-                logging.warning("%s Bybit stop_breakeven: no entry price", instrument_id)
+                logger.warning("%s Bybit stop_breakeven: no entry price", instrument_id)
                 return False
         entry_price = float(entry_price)
 
@@ -708,15 +697,15 @@ class BybitTrade:
                 price=str(new_limit_price),
             )
         except Exception as e:
-            logging.error("%s Bybit stop_breakeven amend_order error: %s", instrument_id, e)
+            logger.error("%s Bybit stop_breakeven amend_order error: %s", instrument_id, e)
             return False
 
         if res.get("retCode") == 0:
             trade["sl_info"]["breakeven"] = True
-            logging.info("✅ %s Bybit stop breakeven updated: trigger=%s", instrument_id, new_trigger)
+            logger.info("✅ %s Bybit stop breakeven updated: trigger=%s", instrument_id, new_trigger)
             return True
 
-        logging.warning("%s Bybit stop_breakeven failed: %s", instrument_id, res.get("retMsg"))
+        logger.warning("%s Bybit stop_breakeven failed: %s", instrument_id, res.get("retMsg"))
         return False
 
     async def close_entire_position(self, trades_dict: dict, instrument_id: str, trade_info: dict, instrument_info: tuple) -> bool:
@@ -740,19 +729,31 @@ class BybitTrade:
                 reduceOnly=True,
             )
         except Exception as e:
-            logging.error("%s Bybit close_entire_position error: %s", instrument_id, e)
+            logger.error("%s Bybit close_entire_position error: %s", instrument_id, e)
             return False
 
         if res.get("retCode") == 0 and res.get("result"):
             ord_id = res["result"].get("orderId")
             trade["status"] = "closed"
-            logging.info("✅ %s Bybit closed entire position orderId=%s", instrument_id, ord_id)
+            logger.info("✅ %s Bybit closed entire position orderId=%s", instrument_id, ord_id)
             return True
 
-        logging.warning("%s Bybit close_entire_position failed: %s", instrument_id, res.get("retMsg"))
+        logger.warning("%s Bybit close_entire_position failed: %s", instrument_id, res.get("retMsg"))
         return False
 
-    
+    async def positions_info(self) -> dict:
+        """
+        Получает информацию о позициях.
+        """
+        try:
+            res = await asyncio.to_thread(
+                self.trade_session.get_positions,
+                category="linear",
+            )
+        except Exception as e:
+            logger.error("%s Bybit positions_info error: %s", e)
+            return False
+        return res
 if __name__ == "__main__":
     from dotenv import load_dotenv
     load_dotenv()
@@ -766,7 +767,7 @@ if __name__ == "__main__":
         symbol = "UNIUSDT"
         available_info = await bybit_trade.get_instrument_info(symbol=symbol)
         if available_info[0] is None:
-            logging.error("Instrument %s not available", symbol)
+            logger.error("Instrument %s not available", symbol)
             return
 
         trades_dict = {}
@@ -783,16 +784,16 @@ if __name__ == "__main__":
         }
 
         # 1. place_new_order (limit)
-        logging.info("--- Test place_new_order ---")
+        logger.info("--- Test place_new_order ---")
         ok = await bybit_trade.place_new_order(trades_dict, symbol, trade_info, available_info)
-        logging.info("place_new_order: %s", ok)
+        logger.info("place_new_order: %s", ok)
         pprint(trades_dict, indent=2, width=80, sort_dicts=False)
 
         time.sleep(2)
         # 2. enter_now (market)
-        logging.info("--- Test enter_now ---")
+        logger.info("--- Test enter_now ---")
         ok = await bybit_trade.enter_now(trades_dict, symbol, trade_info, available_info)
-        logging.info("enter_now: %s", ok)
+        logger.info("enter_now: %s", ok)
         pprint(trades_dict, indent=2, width=80, sort_dicts=False)
 
         trades_dict[trade_info["message_id"]]["current_fill_size"] = 2.6
@@ -800,9 +801,9 @@ if __name__ == "__main__":
         time.sleep(2)
 
         # 3. place_stop_loss_order (conditional)
-        logging.info("--- Test place_stop_loss_order ---")
+        logger.info("--- Test place_stop_loss_order ---")
         ok = await bybit_trade.place_stop_loss_order(trades_dict, symbol, trade_info, available_info)
-        logging.info("place_stop_loss_order: %s", ok)
+        logger.info("place_stop_loss_order: %s", ok)
         pprint(trades_dict, indent=2, width=80, sort_dicts=False)
 
     # asyncio.run(_run_tests())

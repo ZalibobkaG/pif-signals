@@ -1,20 +1,9 @@
 import os
 import asyncio
 import json
-import logging
 from openai import OpenAI
 
-_logs_dir = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "logs"))
-os.makedirs(_logs_dir, exist_ok=True)
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[
-        logging.FileHandler(os.path.join(_logs_dir, "logarik.log"), encoding="utf-8"),
-        logging.StreamHandler(),
-    ],
-)
-
+from loguru import logger
 
 SYSTEM_PROMPT = """
 Ты получаешь сообщение из телеграм канала с торговыми сигналами от разных трейдеров. Тебе нужно обработать это сообщение и выдать
@@ -103,7 +92,7 @@ class WorkWithAI:
                 full_text = item
                 root_id = None
             try:
-                logging.info(f"FULL TEXT: {full_text}")
+                logger.info(f"FULL TEXT: {full_text}")
                 result = await self.get_response(full_text)
                 if isinstance(result, dict):
                     if root_id is not None:
@@ -112,6 +101,6 @@ class WorkWithAI:
                     result["source_text"] = full_text
 
                 await self.ai_response_queue.put(result)
-                logging.info(f" 🤖 {result['action']} {result['trader']} {result['coin']} {result['side']} {result['entry']} {result['sl']} {result['tp']} {result['risk']}")
+                logger.info(f" 🤖 {result['action']} {result['trader']} {result['coin']} {result['side']} {result['entry']} {result['sl']} {result['tp']} {result['risk']}")
             except Exception as e:
-                logging.error(f"AI error: {e}")
+                logger.error(f"AI error: {e}")

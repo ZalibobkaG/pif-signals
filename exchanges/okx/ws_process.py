@@ -1,5 +1,6 @@
-import logging
 import asyncio
+
+from loguru import logger
 
 from exchanges.okx.trade import OkxTrade
 from tg_bot.notify import send_message
@@ -51,13 +52,13 @@ async def ws_process(data: dict, trades_dict: dict, okx_trade: OkxTrade, trade_i
         if len(trade["entry"]) == 1:
             if trade["entry_info"]["ordId"] == order_id:
                 if state == "canceled":
-                    logging.info(f"✅ {instId} ENTRY {state} order {order_id}")
+                    logger.info(f"✅ {instId} ENTRY {state} order {order_id}")
                     trade["status"] = "cancelled"
                     pprint(trade, indent=2, width=80, sort_dicts=False)
 
                 
                 elif state == "partially_filled":
-                    logging.info(f"✅ {instId} ENTRY {state} order {order_id} fill size: {item.get('accFillSz')}")
+                    logger.info(f"✅ {instId} ENTRY {state} order {order_id} fill size: {item.get('accFillSz')}")
                     trade["current_fill_size"] = float(item.get("accFillSz"))
                     trade["entry_info"]["price_filled"] = item.get("fillPx")
                     trade["entry_info"]["size_filled"] = item.get("accFillSz")
@@ -65,7 +66,7 @@ async def ws_process(data: dict, trades_dict: dict, okx_trade: OkxTrade, trade_i
                     trade["status"] = "filled"
 
                 if state == "filled":
-                    logging.info(f"✅ {instId} ENTRY {state} order {order_id} fill size: {item.get('accFillSz')}")
+                    logger.info(f"✅ {instId} ENTRY {state} order {order_id} fill size: {item.get('accFillSz')}")
                     trade["current_fill_size"] = float(item.get("accFillSz"))
                     trade["entry_info"]["price_filled"] = item.get("fillPx")
                     trade["entry_info"]["size_filled"] = item.get("accFillSz")
@@ -89,7 +90,7 @@ async def ws_process(data: dict, trades_dict: dict, okx_trade: OkxTrade, trade_i
                             tp_ids.append(trade["tp_info"][1]["ordId"])
                             tp_ids.append(trade["tp_info"][2]["ordId"])
                         await okx_trade.cancel_orders(trades_dict=trades_dict, instrument_id=instId, ord_ids=tp_ids)
-                    logging.info(f"trade {trade}")
+                    logger.info(f"trade {trade}")
                     await okx_trade.place_stop_loss_order(trades_dict=trades_dict, instrument_id=instId, trade_info=effective_trade_info, instrument_info=instrument_info)
                     await okx_trade.place_tps_first_limit_order(trades_dict=trades_dict, instrument_id=instId, trade_info=effective_trade_info, instrument_info=instrument_info)
                     pprint(trade, indent=2, width=80, sort_dicts=False)
@@ -99,7 +100,7 @@ async def ws_process(data: dict, trades_dict: dict, okx_trade: OkxTrade, trade_i
             if trade["entry_info"][0]["ordId"] == order_id:
 
                 if state == "canceled":
-                    logging.info(f"✅ {instId} ENTRY1{state} order {order_id}")
+                    logger.info(f"✅ {instId} ENTRY1{state} order {order_id}")
                     trade["status"] = "cancelled"
                     # if trade.get("sl_info", None) is not None:
                     #     await okx_trade.cancel_algo_orders(trades_dict=trades_dict, instrument_id=instId, algo_ids=[trade["sl_info"]["ordId"]])
@@ -118,7 +119,7 @@ async def ws_process(data: dict, trades_dict: dict, okx_trade: OkxTrade, trade_i
                     #     await okx_trade.cancel_orders(trades_dict=trades_dict, instrument_id=instId, ord_ids=tp_ids)
                                     
                 elif state == "partially_filled":
-                    logging.info(f"✅ {instId} ENTRY1 {state} order {order_id} fill size: {item.get('accFillSz')}")
+                    logger.info(f"✅ {instId} ENTRY1 {state} order {order_id} fill size: {item.get('accFillSz')}")
                     trade["current_fill_size"] = float(item.get("accFillSz"))
                     trade["entry_info"][0]["price_filled"] = item.get("fillPx")
                     trade["entry_info"][0]["size_filled"] = item.get("accFillSz")
@@ -126,7 +127,7 @@ async def ws_process(data: dict, trades_dict: dict, okx_trade: OkxTrade, trade_i
                     trade["status"] = "filled"
 
                 if state == "filled":
-                    logging.info(f"✅ {instId} ENTRY1 {state} order {order_id} fill size: {item.get('accFillSz')}")
+                    logger.info(f"✅ {instId} ENTRY1 {state} order {order_id} fill size: {item.get('accFillSz')}")
                     trade["current_fill_size"] = float(item.get("accFillSz"))
                     trade["entry_info"][0]["price_filled"] = item.get("fillPx")
                     trade["entry_info"][0]["size_filled"] = item.get("accFillSz")
@@ -156,7 +157,7 @@ async def ws_process(data: dict, trades_dict: dict, okx_trade: OkxTrade, trade_i
             elif trade["entry_info"][1]["ordId"] == order_id:
 
                 if state == "canceled":
-                    logging.info(f"✅ {instId} ENTRY2 {state} order {order_id}")
+                    logger.info(f"✅ {instId} ENTRY2 {state} order {order_id}")
                     trade["status"] = "cancelled"
 
                     if trade.get("sl_info", None) is not None:
@@ -177,7 +178,7 @@ async def ws_process(data: dict, trades_dict: dict, okx_trade: OkxTrade, trade_i
                         pprint(trade, indent=2, width=80, sort_dicts=False)
 
                 elif state == "partially_filled":
-                    logging.info(f"✅ {instId} ENTRY2 {state} order {order_id} fill size: {item.get('accFillSz')}")
+                    logger.info(f"✅ {instId} ENTRY2 {state} order {order_id} fill size: {item.get('accFillSz')}")
                     trade["current_fill_size"] = float(item.get("accFillSz"))
                     trade["entry_info"][1]["price_filled"] = item.get("fillPx")
                     trade["entry_info"][1]["size_filled"] = item.get("accFillSz")
@@ -185,7 +186,7 @@ async def ws_process(data: dict, trades_dict: dict, okx_trade: OkxTrade, trade_i
                     trade["status"] = "filled"
 
                 if state == "filled":
-                    logging.info(f"✅ {instId} ENTRY2 {state} order {order_id} fill size: {item.get('accFillSz')}")
+                    logger.info(f"✅ {instId} ENTRY2 {state} order {order_id} fill size: {item.get('accFillSz')}")
                     trade["current_fill_size"] = float(item.get("accFillSz"))
                     trade["entry_info"][1]["price_filled"] = item.get("fillPx")
                     trade["entry_info"][1]["size_filled"] = item.get("accFillSz")
@@ -218,11 +219,11 @@ async def ws_process(data: dict, trades_dict: dict, okx_trade: OkxTrade, trade_i
                 if trade["tp_info"]["ordId"] == order_id:
 
                     if state == "canceled":
-                        logging.info(f"✅ {instId} TP {state} order {order_id}")
+                        logger.info(f"✅ {instId} TP {state} order {order_id}")
                         del trade["tp_info"]
 
                     elif state == "partially_filled":
-                        logging.info(f"✅ {instId} TP {state} order {order_id} fill size: {item.get('accFillSz')}")
+                        logger.info(f"✅ {instId} TP {state} order {order_id} fill size: {item.get('accFillSz')}")
                         trade["current_fill_size"] -= float(item.get("accFillSz"))
                         trade["tp_info"]["price_filled"] = item.get("fillPx")
                         trade["tp_info"]["size_filled"] = item.get("accFillSz")
@@ -230,29 +231,29 @@ async def ws_process(data: dict, trades_dict: dict, okx_trade: OkxTrade, trade_i
 
                         
                     elif state == "filled":
-                        logging.info(f"✅ {instId} TP {state} order {order_id} fill size: {item.get('accFillSz')}")
+                        logger.info(f"✅ {instId} TP {state} order {order_id} fill size: {item.get('accFillSz')}")
                         trade["current_fill_size"] -= float(item.get("accFillSz"))
                         trade["tp_info"]["price_filled"] = item.get("fillPx")
                         trade["tp_info"]["size_filled"] = item.get("accFillSz")
                         trade["tp_info"]["status"] = {state}
                         if trade.get("sl_info", None) is not None:
                             await okx_trade.cancel_algo_orders(trades_dict=trades_dict, instrument_id=instId, algo_ids=[trade["sl_info"]["ordId"]])
-                        logging.info(f"✅✅✅ {instId} closes all position by TP")
+                        logger.info(f"✅✅✅ {instId} closes all position by TP")
                         trade["status"] = "closed"
                         await send_message(f"✅ TP {instId} — closed by TP")
                 else:
-                    logging.info(f'{instId} {order_id} not found in tp_info len: 1')
+                    logger.info(f'{instId} {order_id} not found in tp_info len: 1')
 
             elif len(trade["tp_info"]) == 2:
 
                 if trade["tp_info"][0]["ordId"] == order_id:
 
                     if state == "canceled":
-                        logging.info(f"✅ {instId} TP1 {state} order {order_id}")
+                        logger.info(f"✅ {instId} TP1 {state} order {order_id}")
                         del trade["tp_info"]
 
                     elif state == "partially_filled":
-                        logging.info(f"✅ {instId} TP1 {state} order {order_id} fill size: {item.get('accFillSz')}")
+                        logger.info(f"✅ {instId} TP1 {state} order {order_id} fill size: {item.get('accFillSz')}")
                         trade["current_fill_size"] -= float(item.get("accFillSz"))
                         trade["tp_info"][0]["price_filled"] = item.get("fillPx")
                         trade["tp_info"][0]["size_filled"] = item.get("accFillSz")
@@ -260,7 +261,7 @@ async def ws_process(data: dict, trades_dict: dict, okx_trade: OkxTrade, trade_i
                 
 
                     elif state == "filled":
-                        logging.info(f"✅ {instId} TP1 {state} order {order_id} fill size: {item.get('accFillSz')}")
+                        logger.info(f"✅ {instId} TP1 {state} order {order_id} fill size: {item.get('accFillSz')}")
                         trade["current_fill_size"] -= float(item.get("accFillSz"))
                         trade["tp_info"][0]["price_filled"] = item.get("fillPx")
                         trade["tp_info"][0]["size_filled"] = item.get("accFillSz")
@@ -274,11 +275,11 @@ async def ws_process(data: dict, trades_dict: dict, okx_trade: OkxTrade, trade_i
                 elif trade["tp_info"][1]["ordId"] == order_id:
                     
                     if state == "canceled":
-                        logging.info(f"✅ {instId} TP2 {state} order {order_id}")
+                        logger.info(f"✅ {instId} TP2 {state} order {order_id}")
                         del trade["tp_info"]
 
                     elif state == "partially_filled":
-                        logging.info(f"✅ {instId} TP2 {state} order {order_id} fill size: {item.get('accFillSz')}")
+                        logger.info(f"✅ {instId} TP2 {state} order {order_id} fill size: {item.get('accFillSz')}")
                         trade["current_fill_size"] -= float(item.get("accFillSz"))
                         trade["tp_info"][1]["price_filled"] = item.get("fillPx")
                         trade["tp_info"][1]["size_filled"] = item.get("accFillSz")
@@ -286,14 +287,14 @@ async def ws_process(data: dict, trades_dict: dict, okx_trade: OkxTrade, trade_i
                       
 
                     elif state == "filled":
-                        logging.info(f"✅ {instId} TP2 {state} order {order_id} fill size: {item.get('accFillSz')}")
+                        logger.info(f"✅ {instId} TP2 {state} order {order_id} fill size: {item.get('accFillSz')}")
                         trade["current_fill_size"] -= float(item.get("accFillSz"))
                         trade["tp_info"][1]["price_filled"] = item.get("fillPx")
                         trade["tp_info"][1]["size_filled"] = item.get("accFillSz")
                         trade["tp_info"][1]["status"] = {state}
                         if trade.get("sl_info", None) is not None:
                             await okx_trade.cancel_algo_orders(trades_dict=trades_dict, instrument_id=instId, algo_ids=[trade["sl_info"]["ordId"]])
-                        logging.info(f"✅✅✅ {instId} closes all position by TP")
+                        logger.info(f"✅✅✅ {instId} closes all position by TP")
                         trade["status"] = "closed"
                         await send_message(f"✅ TP2 {instId} — closed by TP")
 
@@ -302,11 +303,11 @@ async def ws_process(data: dict, trades_dict: dict, okx_trade: OkxTrade, trade_i
                 if trade["tp_info"][0]["ordId"] == order_id:
 
                     if state == "canceled":
-                        logging.info(f"✅ {instId} TP1{state} order {order_id}")
+                        logger.info(f"✅ {instId} TP1{state} order {order_id}")
                         del trade["tp_info"]
 
                     elif state == "partially_filled":
-                        logging.info(f"✅ {instId} TP1 {state} order {order_id} fill size: {item.get('accFillSz')}")
+                        logger.info(f"✅ {instId} TP1 {state} order {order_id} fill size: {item.get('accFillSz')}")
                         trade["current_fill_size"] -= float(item.get("accFillSz"))
                         trade["tp_info"][0]["price_filled"] = item.get("fillPx")
                         trade["tp_info"][0]["size_filled"] = item.get("accFillSz")
@@ -314,7 +315,7 @@ async def ws_process(data: dict, trades_dict: dict, okx_trade: OkxTrade, trade_i
                       
                         
                     elif state == "filled":
-                        logging.info(f"✅ {instId} TP1 {state} order {order_id} fill size: {item.get('accFillSz')}")
+                        logger.info(f"✅ {instId} TP1 {state} order {order_id} fill size: {item.get('accFillSz')}")
                         trade["current_fill_size"] -= float(item.get("accFillSz"))
                         trade["tp_info"][0]["price_filled"] = item.get("fillPx")
                         trade["tp_info"][0]["size_filled"] = item.get("accFillSz")
@@ -329,11 +330,11 @@ async def ws_process(data: dict, trades_dict: dict, okx_trade: OkxTrade, trade_i
                 elif trade["tp_info"][1]["ordId"] == order_id:
 
                     if state == "canceled":
-                        logging.info(f"✅ {instId} TP2 {state} order {order_id}")
+                        logger.info(f"✅ {instId} TP2 {state} order {order_id}")
                         del trade["tp_info"]
 
                     elif state == "partially_filled":
-                        logging.info(f"✅ {instId} TP2 {state} order {order_id} fill size: {item.get('accFillSz')}")
+                        logger.info(f"✅ {instId} TP2 {state} order {order_id} fill size: {item.get('accFillSz')}")
                         trade["current_fill_size"] -= float(item.get("accFillSz"))
                         trade["tp_info"][1]["price_filled"] = item.get("fillPx")
                         trade["tp_info"][1]["size_filled"] = item.get("accFillSz")
@@ -342,7 +343,7 @@ async def ws_process(data: dict, trades_dict: dict, okx_trade: OkxTrade, trade_i
                      
 
                     elif state == "filled":
-                        logging.info(f"✅ {instId} TP2 {state} order {order_id} fill size: {item.get('accFillSz')}")
+                        logger.info(f"✅ {instId} TP2 {state} order {order_id} fill size: {item.get('accFillSz')}")
                         trade["current_fill_size"] -= float(item.get("accFillSz"))
                         trade["tp_info"][1]["price_filled"] = item.get("fillPx")
                         trade["tp_info"][1]["size_filled"] = item.get("accFillSz")
@@ -357,11 +358,11 @@ async def ws_process(data: dict, trades_dict: dict, okx_trade: OkxTrade, trade_i
                 elif trade["tp_info"][2]["ordId"] == order_id:
                     
                     if state == "canceled":
-                        logging.info(f"✅ {instId} TP3 {state} order {order_id}")
+                        logger.info(f"✅ {instId} TP3 {state} order {order_id}")
                         del trade["tp_info"]
 
                     elif state == "partially_filled":
-                        logging.info(f"✅ {instId} TP3 {state} order {order_id} fill size: {item.get('accFillSz')}")
+                        logger.info(f"✅ {instId} TP3 {state} order {order_id} fill size: {item.get('accFillSz')}")
                         trade["current_fill_size"] -= float(item.get("accFillSz"))
                         trade["tp_info"][2]["price_filled"] = item.get("fillPx")
                         trade["tp_info"][2]["size_filled"] = item.get("accFillSz")
@@ -369,42 +370,42 @@ async def ws_process(data: dict, trades_dict: dict, okx_trade: OkxTrade, trade_i
                     
 
                     elif state == "filled":
-                        logging.info(f"✅ {instId} TP3 {state} order {order_id} fill size: {item.get('accFillSz')}")
+                        logger.info(f"✅ {instId} TP3 {state} order {order_id} fill size: {item.get('accFillSz')}")
                         trade["current_fill_size"] -= float(item.get("accFillSz"))
                         trade["tp_info"][2]["price_filled"] = item.get("fillPx")
                         trade["tp_info"][2]["size_filled"] = item.get("accFillSz")
                         trade["tp_info"][2]["status"] = {state}
                         if trade.get("sl_info", None) is not None:
                             await okx_trade.cancel_algo_orders(trades_dict=trades_dict, instrument_id=instId, algo_ids=[trade["sl_info"]["ordId"]])
-                        logging.info(f"✅✅✅ {instId} closes all position by TP")
+                        logger.info(f"✅✅✅ {instId} closes all position by TP")
                         trade["status"] = "closed"
                         await send_message(f"✅ TP {instId} — closed by TP")
                         pprint(trade, indent=2, width=80, sort_dicts=False)
                 
                 else:
-                    logging.info(f'{instId} {order_id} not found in tp_info len: 3')
+                    logger.info(f'{instId} {order_id} not found in tp_info len: 3')
 
         if trade.get("sl_info", None) is not None:
             if trade["sl_info"]["ordId"] == order_id:
 
                 if state == "canceled":
-                    logging.info(f"✅ {instId} SL {state} order {order_id}")
+                    logger.info(f"✅ {instId} SL {state} order {order_id}")
                     del trade["sl_info"]
 
                 elif state == "partially_filled":
-                    logging.info(f"✅ {instId} SL {state} order {order_id} fill size: {item.get('accFillSz')}")
+                    logger.info(f"✅ {instId} SL {state} order {order_id} fill size: {item.get('accFillSz')}")
                     trade["current_fill_size"] -= float(item.get("accFillSz"))
                     trade["sl_info"]["price_filled"] = item.get("fillPx")
                     trade["sl_info"]["size_filled"] = item.get("accFillSz")
                     trade["sl_info"]["status"] = {state}
 
                 elif state == "filled":
-                    logging.info(f"✅ {instId} SL {state} order {order_id} fill size: {item.get('accFillSz')}")
+                    logger.info(f"✅ {instId} SL {state} order {order_id} fill size: {item.get('accFillSz')}")
                     trade["current_fill_size"] -= float(item.get("accFillSz"))
                     trade["sl_info"]["price_filled"] = item.get("fillPx")
                     trade["sl_info"]["size_filled"] = item.get("accFillSz")
                     trade["sl_info"]["status"] = {state}
-                    logging.info(f"✅ {instId} SL {state} order {order_id} fill size: {item.get('accFillSz')}")
+                    logger.info(f"✅ {instId} SL {state} order {order_id} fill size: {item.get('accFillSz')}")
                     if trade.get("tp_info", None) is not None:
                         tp_ids = []
                         if len(trade["tp_info"]) == 1:
@@ -416,9 +417,9 @@ async def ws_process(data: dict, trades_dict: dict, okx_trade: OkxTrade, trade_i
                             tp_ids.append(trade["tp_info"][0]["ordId"])
                             tp_ids.append(trade["tp_info"][1]["ordId"])
                             tp_ids.append(trade["tp_info"][2]["ordId"])
-                        logging.info(f"tp_ids: {tp_ids}")
+                        logger.info(f"tp_ids: {tp_ids}")
                         await okx_trade.cancel_orders(trades_dict=trades_dict, instrument_id=instId, ord_ids=tp_ids)
-                    logging.info(f"✅✅✅ {instId} closes all position by SL")
+                    logger.info(f"✅✅✅ {instId} closes all position by SL")
                     trades_dict[effective_trade_info["message_id"]]["status"] = "closed"
                     await send_message(f"🛑 SL {instId} — closed by SL")
                     pprint(trade, indent=2, width=80, sort_dicts=False)

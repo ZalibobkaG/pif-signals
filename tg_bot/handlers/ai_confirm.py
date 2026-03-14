@@ -1,6 +1,7 @@
 """Обработка нажатий «Выставить» / «Пропустить» по сообщению с сигналом AI."""
-import logging
 import os
+
+from loguru import logger
 
 import aiohttp
 from aiogram import Router
@@ -49,13 +50,13 @@ async def on_ai_confirm(callback: CallbackQuery) -> None:
                 async with session.post(url, json=payload) as resp:
                     if resp.status != 200:
                         body = await resp.text()
-                        logging.warning(
+                        logger.warning(
                             "ai_confirm: raw editMessageReplyMarkup failed: %s %s",
                             resp.status,
                             body,
                         )
         except Exception as e:
-            logging.warning("ai_confirm: exception on raw editMessageReplyMarkup: %s", e)
+            logger.warning("ai_confirm: exception on raw editMessageReplyMarkup: %s", e)
 
     async def _finalize(choice, action_label=None) -> None:
         # Сообщаем в стратегию

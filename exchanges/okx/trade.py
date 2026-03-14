@@ -1,24 +1,13 @@
-import logging
 import os
 import asyncio
+import time
 from okx.api.public import Public
 from okx.api.trade import Trade
 from okx.api.algotrade import AlgoTrade
 from okx.api.account import Account
-import time
 from pprint import pprint
 
-logging.basicConfig(level=logging.INFO)
-_logs_dir = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", "logs"))
-os.makedirs(_logs_dir, exist_ok=True)
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(message)s',
-    handlers=[
-        logging.FileHandler(os.path.join(_logs_dir, "logarik.log"), encoding="utf-8"),
-        logging.StreamHandler()
-    ]
-)
+from loguru import logger
 class OkxTrade:
     def __init__(self, api_key, api_secret, api_passphrase, balance: float = 100.0):
         self.api_key = api_key
@@ -46,7 +35,7 @@ class OkxTrade:
     async def get_instrument_info(self, instrument_id: str, inst_type: str = "SWAP") -> tuple:
         res = await asyncio.to_thread(self.publicData.get_instruments, instType=inst_type, instId=instrument_id)
         if "data" not in res or not res["data"]:
-            logging.warning(f"Не удалось получить данные инструмента {instrument_id}")
+            logger.warning(f"Не удалось получить данные инструмента {instrument_id}")
             return None, None, None, None
         info = res["data"][0]
         lot_size = float(info["lotSz"])
@@ -54,13 +43,13 @@ class OkxTrade:
         tick_size = float(info["tickSz"])
         min_size = float(info["minSz"])
         max_leverage = float(info["lever"])
-        logging.info(f"{instrument_id} lot_size: {lot_size}, ct_val: {ct_val}, min_size: {min_size}, tick_size: {tick_size}, max_leverage: {max_leverage}")
+        logger.info(f"{instrument_id} lot_size: {lot_size}, ct_val: {ct_val}, min_size: {min_size}, tick_size: {tick_size}, max_leverage: {max_leverage}")
         return lot_size, ct_val, min_size, tick_size, max_leverage
 
     async def set_leverage(self, instrument_id: str, leverage: int) -> bool:
         res = self.account.set_leverage(instId=instrument_id, lever=leverage, mgnMode="isolated")
         if res.get("code") != "0":
-            logging.warning(f"{instrument_id} Failed to set leverage: {res.get('msg')}")
+            logger.warning(f"{instrument_id} Failed to set leverage: {res.get('msg')}")
             return False
         return True
 
@@ -69,7 +58,7 @@ class OkxTrade:
         side = "buy" if trade_info["side"] == "long" else "sell"
 
         if trade_info["entry"] == None:
-            logging.info(f"{instrument_id} OKX entry is None - Using current price")
+            logger.info(f"{instrument_id} OKX entry is None - Using current price")
             entry = await self.get_curr_price(instrument_id)
             trade_info["entry"] = [entry]
         
@@ -104,13 +93,13 @@ class OkxTrade:
 
             # Ограничиваем плечо: не больше max_leverage биржи, не больше max_leverage_by_liq и не больше 20x по нашей стратегии
             safe_leverage = min(max_leverage, max_leverage_by_liq, 20)
-            logging.info(f"{instrument_id} max_leverage_by_liq: {max_leverage_by_liq}")
+            logger.info(f"{instrument_id} max_leverage_by_liq: {max_leverage_by_liq}")
             leverage = int(max(1, round(safe_leverage)))  # не меньше 1, округление
             
             
             sl_distance_percent = (sl_distance_usd / entry) * 100
             
-            logging.info(f"{instrument_id} Position size: {position_size} contracts, Nominal: {position_nominal_usd:.2f} USD")
+            logger.info(f"{instrument_id} Position size: {position_size} contracts, Nominal: {position_nominal_usd:.2f} USD")
             
             # Устанавливаем плечо
             await self.set_leverage(instrument_id, leverage)
@@ -137,10 +126,10 @@ class OkxTrade:
                     trades_dict[message_id]["status"] = "active"
                     trades_dict[message_id]["entry_info"] = {"ordId": ord_id, "price_filled": None, "size": position_size, "size_filled": None, "status": "active"}
                     pprint(trades_dict[message_id], indent=2, width=80, sort_dicts=False)
-                    logging.info(f"✅ {instrument_id} Updated trades_dict[{message_id}] with entry_ordId: {ord_id}")
+                    logger.info(f"✅ {instrument_id} Updated trades_dict[{message_id}] with entry_ordId: {ord_id}")
 
             except Exception as e:
-                logging.error(f"{instrument_id} Error placing order: {e}")
+                logger.error(f"{instrument_id} Error placing order: {e}")
                 return False
             return True
 
@@ -182,7 +171,7 @@ class OkxTrade:
             # Не больше max_leverage биржи, не больше max_leverage_by_liq и не больше 20x
             leverage = int(max(1, min(max_leverage, max_leverage_by_liq, 20)))
 
-            logging.info(f"{instrument_id} Two entries: first={entry_first}, second={entry_second}, size_first={size_first}, size_second={size_second}, leverage={leverage}x")
+            logger.info(f"{instrument_id} Two entries: first={entry_first}, second={entry_second}, size_first={size_first}, size_second={size_second}, leverage={leverage}x")
             await self.set_leverage(instrument_id, leverage)
 
             batch_orders = [
@@ -192,7 +181,7 @@ class OkxTrade:
             ord_ids = []
             try:
                 res = self.trade.set_batch_orders(batch_orders)
-                logging.info(f"{instrument_id} Batch orders placed: {res}")
+                logger.info(f"{instrument_id} Batch orders placed: {res}")
                 if res.get("code") == "0" and res.get("data"):
                     for item in res["data"]:
                         if item.get("sCode") == "0" and item.get("ordId"):
@@ -210,9 +199,9 @@ class OkxTrade:
                     ]
                     trades_dict[message_id]["status"] = "active"
                     pprint(trades_dict[message_id], indent=2, width=80, sort_dicts=False)
-                    logging.info(f"✅ {instrument_id} Updated trades_dict[{message_id}] with entry_ordId(s): {ord_ids}")
+                    logger.info(f"✅ {instrument_id} Updated trades_dict[{message_id}] with entry_ordId(s): {ord_ids}")
             except Exception as e:
-                logging.error(f"{instrument_id} Error placing two orders: {e}")
+                logger.error(f"{instrument_id} Error placing two orders: {e}")
                 return False
             return True
 
@@ -235,10 +224,10 @@ class OkxTrade:
                 if res.get("code") == "0" and res.get("data"):
                     tp_id = res["data"][0].get("ordId")
                     trade["tp_info"] = {"ordId": tp_id, "price_filled": None, "size": total_size, "size_filled": None, "status": "active"}
-                    logging.info(f"✅ {instrument_id} Updated trades_dict {trade_info['message_id']} with tp_ordId: {tp_id}")
+                    logger.info(f"✅ {instrument_id} Updated trades_dict {trade_info['message_id']} with tp_ordId: {tp_id}")
                     pprint(trade, indent=2, width=80, sort_dicts=False)
             except Exception as e:
-                logging.error(f"{instrument_id} Error placing first tp limit order: {e}")
+                logger.error(f"{instrument_id} Error placing first tp limit order: {e}")
         
         elif len(trade["tp"]) == 2:
             tp_first_size = self.round_tick(total_size * 0.5, lot_size)
@@ -257,10 +246,10 @@ class OkxTrade:
                             ord_ids.append(item["ordId"])
                     if ord_ids:
                         trade["tp_info"] = {"ordId": ord_ids[0], "price_filled": None, "size": tp_first_size, "size_filled": None, "status": "active"}, {"ordId": ord_ids[1], "price_filled": None, "size": tp_second_size, "size_filled": None, "status": "active"}
-                        logging.info(f"✅ {instrument_id} Updated trades_dict {trade_info['message_id']} with tp_ordId(s): {ord_ids}")
+                        logger.info(f"✅ {instrument_id} Updated trades_dict {trade_info['message_id']} with tp_ordId(s): {ord_ids}")
                         pprint(trade, indent=2, width=80, sort_dicts=False)
             except Exception as e:
-                logging.error(f"{instrument_id} Error placing second tp limit order: {e}")
+                logger.error(f"{instrument_id} Error placing second tp limit order: {e}")
                 return False
             return True
 
@@ -284,10 +273,10 @@ class OkxTrade:
                             ord_ids.append(item["ordId"])
                     if ord_ids:
                         trade["tp_info"] = {"ordId": ord_ids[0], "price_filled": None, "size": tp_first_size, "size_filled": None, "status": "active"}, {"ordId": ord_ids[1], "price_filled": None, "size": tp_second_size, "size_filled": None, "status": "active"}, {"ordId": ord_ids[2], "price_filled": None, "size": tp_third_size, "size_filled": None, "status": "active"}
-                        logging.info(f"✅ {instrument_id} Updated trades_dict {trade_info['message_id']} with tp_ordId(s): {ord_ids}")
+                        logger.info(f"✅ {instrument_id} Updated trades_dict {trade_info['message_id']} with tp_ordId(s): {ord_ids}")
                         pprint(trade, indent=2, width=80, sort_dicts=False)
             except Exception as e:
-                logging.error(f"{instrument_id} Error placing third tp limit order: {e}")
+                logger.error(f"{instrument_id} Error placing third tp limit order: {e}")
                 return False
             return True
 
@@ -305,10 +294,10 @@ class OkxTrade:
                 )
                 if res.get("code") == "0" and res.get("data"):
                     trade["tp_info"]["size"] = total_size
-                    logging.info(f"✅ {instrument_id} Updated size of tp limit order")
+                    logger.info(f"✅ {instrument_id} Updated size of tp limit order")
                     pprint(trade, indent=2, width=80, sort_dicts=False)
             except Exception as e:
-                logging.error(f"{instrument_id} Error placing first tp limit order: {e}")
+                logger.error(f"{instrument_id} Error placing first tp limit order: {e}")
         
         elif len(trade["tp"]) == 2:
             tp_first_size = self.round_tick(total_size * 0.5, lot_size)
@@ -328,10 +317,10 @@ class OkxTrade:
                     if ord_ids:
                         trade["tp_info"][0]["size"] = tp_first_size
                         trade["tp_info"][1]["size"] = tp_second_size
-                        logging.info(f"✅ {instrument_id} Updated sizes of tp limits orders")
+                        logger.info(f"✅ {instrument_id} Updated sizes of tp limits orders")
                         pprint(trade, indent=2, width=80, sort_dicts=False)
             except Exception as e:
-                logging.error(f"{instrument_id} Error placing second tp limit order: {e}")
+                logger.error(f"{instrument_id} Error placing second tp limit order: {e}")
                 return False
             return True
 
@@ -357,10 +346,10 @@ class OkxTrade:
                         trade["tp_info"][0]["size"] = tp_first_size
                         trade["tp_info"][1]["size"] = tp_second_size
                         trade["tp_info"][2]["size"] = tp_third_size
-                        logging.info(f"✅ {instrument_id} Updated sizes of tp limits orders")
+                        logger.info(f"✅ {instrument_id} Updated sizes of tp limits orders")
                         pprint(trade, indent=2, width=80, sort_dicts=False)
             except Exception as e:
-                logging.error(f"{instrument_id} Error placing third tp limit order: {e}")
+                logger.error(f"{instrument_id} Error placing third tp limit order: {e}")
                 return False
             return True
 
@@ -371,13 +360,13 @@ class OkxTrade:
         try:
             res = self.trade.set_cancel_batch_orders(batch_orders)
             if res.get("code") == "0" and res.get("data"):
-                logging.info(f"✅ {instrument_id} Cancelled orders {ord_ids}")
+                logger.info(f"✅ {instrument_id} Cancelled orders {ord_ids}")
                 return True
             else:
-                logging.error(f"{instrument_id} Error cancelling orders {ord_ids}: {res.get('msg')}")
+                logger.error(f"{instrument_id} Error cancelling orders {ord_ids}: {res.get('msg')}")
                 return False
         except Exception as e:
-            logging.error(f"{instrument_id} Error cancelling orders {ord_ids}: {e}")
+            logger.error(f"{instrument_id} Error cancelling orders {ord_ids}: {e}")
             return False
 
     async def cancel_algo_orders(self, trades_dict: dict, instrument_id: str, algo_ids: list) -> bool:
@@ -385,12 +374,12 @@ class OkxTrade:
         try:
             res = self.algotrade.send_request("/api/v5/trade/cancel-algos", "POST", body, proxies={}, proxy_host=None)
             if res.get("code") == "0":
-                logging.info(f"✅ Cancelled algo orders {algo_ids} {instrument_id}")
+                logger.info(f"✅ Cancelled algo orders {algo_ids} {instrument_id}")
                 return True
-            logging.error(f"Error cancelling algo orders {algo_ids} {instrument_id}: {res.get('msg')}")
+            logger.error(f"Error cancelling algo orders {algo_ids} {instrument_id}: {res.get('msg')}")
             return False
         except Exception as e:
-            logging.error(f"Error cancelling algo orders {algo_ids} {instrument_id}: {e}")
+            logger.error(f"Error cancelling algo orders {algo_ids} {instrument_id}: {e}")
             return False
     
     async def stop_breakeven(self, trades_dict: dict, instrument_id: str, trade_info: dict, instrument_info: tuple) -> bool:
@@ -411,11 +400,11 @@ class OkxTrade:
             )
             if res.get("code") == "0" and res.get("data"):
                 trade["sl_info"]["breakeven"] = True
-                logging.info(f"✅ {instrument_id} stop breakeven order updated")
+                logger.info(f"✅ {instrument_id} stop breakeven order updated")
                 pprint(trade, indent=2, width=80, sort_dicts=False)
                 return True
         except Exception as e:
-            logging.error(f"{instrument_id} Error placing sl limit order: {e}")
+            logger.error(f"{instrument_id} Error placing sl limit order: {e}")
             return False
 
     async def place_stop_loss_order(self, trades_dict: dict, instrument_id: str, trade_info: dict, instrument_info: tuple) -> bool:
@@ -438,12 +427,12 @@ class OkxTrade:
             res = self.algotrade.set_order_algo(**order)
             if res.get("code") == "0" and res.get("data"):
                 trade["sl_info"] = {"ordId": res["data"][0].get("algoId"), "price_filled": None, "size": current_fill_size, "size_filled": None, "status": "active"}
-                logging.info(f"✅ {instrument_id} stop loss order placed")
+                logger.info(f"✅ {instrument_id} stop loss order placed")
                 pprint(trade, indent=2, width=80, sort_dicts=False)
             else:
-                logging.warning(f"{instrument_id} place_stop_loss_order failed, full response: {res}")
+                logger.warning(f"{instrument_id} place_stop_loss_order failed, full response: {res}")
         except Exception as e:
-            logging.error(f"{instrument_id} Error placing stop loss order: {e}")
+            logger.error(f"{instrument_id} Error placing stop loss order: {e}")
             return False
         return True
 
@@ -465,11 +454,11 @@ class OkxTrade:
                 ord_id = res["data"][0].get("ordId")
                 filled_price = float(res["data"][0].get("fillPx", 0))
 
-                logging.info(f"✅ {instrument_id} closed entire position {ord_id} at {filled_price}")
+                logger.info(f"✅ {instrument_id} closed entire position {ord_id} at {filled_price}")
                 pprint(trade, indent=2, width=80, sort_dicts=False)
                 return True
         except Exception as e:
-            logging.error(f"{instrument_id} Error closing entire position: {e}")
+            logger.error(f"{instrument_id} Error closing entire position: {e}")
             return False
         return True
 
@@ -516,13 +505,13 @@ class OkxTrade:
 
         # Ограничиваем плечо: не больше max_leverage биржи, не больше max_leverage_by_liq и не больше 20x
         safe_leverage = min(max_leverage, max_leverage_by_liq, 20)
-        logging.info(f"{instrument_id} max_leverage_by_liq: {max_leverage_by_liq}")
+        logger.info(f"{instrument_id} max_leverage_by_liq: {max_leverage_by_liq}")
         leverage = int(max(1, round(safe_leverage)))  # не меньше 1, округление
         
         
         sl_distance_percent = (sl_distance_usd / entry) * 100
         
-        logging.info(f"{instrument_id} Position size: {position_size} contracts, Nominal: {position_nominal_usd:.2f} USD")
+        logger.info(f"{instrument_id} Position size: {position_size} contracts, Nominal: {position_nominal_usd:.2f} USD")
         
         # Устанавливаем плечо
         await self.set_leverage(instrument_id, leverage)
@@ -539,7 +528,7 @@ class OkxTrade:
 
             # Сохраняем информацию о размещённом ордере в trades_dict
             if res.get("code") == "0" and res.get("data"):
-                logging.info(f"✅ {instrument_id} entered now at {curr_price}")
+                logger.info(f"✅ {instrument_id} entered now at {curr_price}")
                 ord_id = res["data"][0].get("ordId")
                 message_id = trade.get("message_id")
                 # Обновляем trades_dict: добавляем entry_ordId к существующей информации
@@ -551,14 +540,14 @@ class OkxTrade:
                 if len(trade["entry"]) == 2:
                     trades_dict[message_id]["entry"].pop(-1)
                 trades_dict[message_id]["entry_info"] = {"ordId": ord_id, "price_filled": None, "size": position_size, "size_filled": None, "status": "active"}
-                logging.info(f"✅ {instrument_id} Updated trades_dict[{message_id}] with entry_ordId: {ord_id}")
+                logger.info(f"✅ {instrument_id} Updated trades_dict[{message_id}] with entry_ordId: {ord_id}")
                 pprint(trades_dict[message_id], indent=2, width=80, sort_dicts=False)
             else:
-                logging.info(f"{instrument_id} Error placing order: {res.get('msg')}")
+                logger.info(f"{instrument_id} Error placing order: {res.get('msg')}")
                 return False
 
         except Exception as e:
-            logging.info(f"{instrument_id} Error placing order: {e}")
+            logger.info(f"{instrument_id} Error placing order: {e}")
             return False
         return True
 

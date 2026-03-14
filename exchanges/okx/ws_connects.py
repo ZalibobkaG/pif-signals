@@ -1,23 +1,12 @@
-import logging
 import websockets
 import asyncio
 import json
 import hmac
-import time 
+import time
 import hashlib
 import base64
 
-import os as _os
-_logs_dir = _os.path.normpath(_os.path.join(_os.path.dirname(__file__), "..", "..", "logs"))
-_os.makedirs(_logs_dir, exist_ok=True)
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(message)s',
-    handlers=[
-        logging.FileHandler(_os.path.join(_logs_dir, "logarik.log"), encoding="utf-8"),
-        logging.StreamHandler()
-    ]
-)
+from loguru import logger
 
 class WebSocketClient:
 	def __init__(self, api_key, secret_key, passphrase, orders_queue: asyncio.Queue):
@@ -42,7 +31,7 @@ class WebSocketClient:
 			except Exception as e:
 				if not self.running:
 					break
-				logging.warning(f"❗️ OKX Private WS error: {e}, reconnecting in {self.reconnect_delay}s")
+				logger.warning(f"❗️ OKX Private WS error: {e}, reconnecting in {self.reconnect_delay}s")
 				await asyncio.sleep(self.reconnect_delay)
 
 	async def subscribe_private(self):
@@ -51,7 +40,7 @@ class WebSocketClient:
 			"args": [{"channel": "orders", "instType": "SWAP"}, {"channel": "orders-algo", "instType": "SWAP"}]
 		}
 		await self.private_ws.send(json.dumps(msg))
-		logging.info(f"✅ OKX Subscribed to private orders")
+		logger.info(f"✅ OKX Subscribed to private orders")
 
 	async def login(self):
 		timestamp = str(time.time())
@@ -75,7 +64,7 @@ class WebSocketClient:
 		async for msg in self.private_ws:
 			data = json.loads(msg)
 			if data.get("event") == "login" and data.get("code") == "0":
-				logging.info("✅ OKX Login successful")
+				logger.info("✅ OKX Login successful")
 				break
 			elif data.get("event") == "login" and data.get("code") != "0":
 				raise Exception(f"❗️ OKX Login failed: {data}")
@@ -90,7 +79,7 @@ class WebSocketClient:
 					# print(f"Private orders update: {orders}")
 					# Log all order states from the update
 					states = [order.get("state") for order in orders]
-					logging.info(f"🚦🚦🚦 WS update {states}: {orders}")
+					logger.info(f"🚦🚦🚦 WS update {states}: {orders}")
 					await self.orders_queue.put(data)
 
 	async def start(self):
@@ -99,10 +88,10 @@ class WebSocketClient:
 			self.private_task = asyncio.create_task(self.connect_private())
 			await self.private_task
 		except Exception as e:
-			logging.warning(e)
+			logger.warning(e)
 
 	async def shutdown(self):
-		logging.info("🌀 OKX Shutting down WebSocket manager...")
+		logger.info("🌀 OKX Shutting down WebSocket manager...")
 		self.running = False
 		if self.private_ws:
 			await self.private_ws.close()
@@ -112,4 +101,4 @@ class WebSocketClient:
 				await self.private_task
 			except asyncio.CancelledError:
 				pass
-		logging.info("✅ OKX WebSocket manager stopped")
+		logger.info("✅ OKX WebSocket manager stopped")

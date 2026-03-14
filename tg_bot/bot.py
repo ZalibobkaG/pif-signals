@@ -3,9 +3,10 @@
 Токен: TG_BOT_TOKEN, только пользователь: TG_USERNAME (например @your_username)
 """
 import asyncio
-import logging
 import os
 import sys
+
+from loguru import logger
 from pathlib import Path
 
 if __name__ == "__main__":
@@ -33,9 +34,9 @@ def _apply_notify_chat_id():
     if raw:
         try:
             tg_context.notify_chat_id = int(raw)
-            logging.info("tg_bot: TG_NOTIFY_CHAT_ID задан в .env, уведомления в этот чат")
+            logger.info("tg_bot: TG_NOTIFY_CHAT_ID задан в .env, уведомления в этот чат")
         except ValueError:
-            logging.warning("tg_bot: TG_NOTIFY_CHAT_ID должен быть числом, получено: %r", raw)
+            logger.warning("tg_bot: TG_NOTIFY_CHAT_ID должен быть числом, получено: %r", raw)
 
 
 class StopEventMiddleware:
@@ -51,7 +52,7 @@ class StopEventMiddleware:
 
 async def main(shutdown_callback=None) -> None:
     if not TOKEN:
-        logging.error("TG_BOT_TOKEN не задан в .env")
+        logger.error("TG_BOT_TOKEN не задан в .env")
         return
     _apply_notify_chat_id()
     stop_event = asyncio.Event() if shutdown_callback is None else None
@@ -78,19 +79,18 @@ async def main(shutdown_callback=None) -> None:
         except asyncio.CancelledError:
             pass
         await bot.session.close()
-    logging.info("Бот остановлен.")
+    logger.info("Бот остановлен.")
 
 
 async def run_with_shutdown(shutdown_callback) -> None:
     """Точка входа при запуске из main.py: по /stop вызывается shutdown_callback (full_shutdown)."""
-    logging.info("TG bot task started.")
+    logger.info("TG bot task started.")
     if not TOKEN:
-        logging.error("TG_BOT_TOKEN не задан в .env — тг бот не запущен.")
+        logger.error("TG_BOT_TOKEN не задан в .env — тг бот не запущен.")
         return
-    logging.info("TG bot starting (polling)...")
+    logger.info("TG bot starting (polling)...")
     await main(shutdown_callback=shutdown_callback)
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
     asyncio.run(main())

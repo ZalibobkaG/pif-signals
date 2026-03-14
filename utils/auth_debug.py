@@ -8,6 +8,7 @@ from telethon.errors import SessionPasswordNeededError
 
 
 load_dotenv()
+from loguru import logger
 
 _BASE_DIR = os.path.normpath(os.path.join(os.path.dirname(__file__), ".."))
 SESSIONS_DIR = os.path.join(_BASE_DIR, "tg_sessions")
@@ -26,9 +27,9 @@ async def main():
     for f in session_files:
         try:
             os.remove(f)
-            print(f"Удален файл сессии: {f}")
+            logger.info(f"Удален файл сессии: {f}")
         except Exception as e:
-            print(f"Не удалось удалить {f}: {e}")
+            logger.error(f"Не удалось удалить {f}: {e}")
     
     client = TelegramClient(session_path, API_ID, API_HASH)
 
@@ -44,7 +45,7 @@ async def main():
             pwd = input("Облачный пароль (2FA): ").strip()
             await client.sign_in(password=pwd)
 
-    print("Успешная авторизация. Сессия сохранена.")
+    logger.info("Успешная авторизация. Сессия сохранена.")
     await client.disconnect()
 
 

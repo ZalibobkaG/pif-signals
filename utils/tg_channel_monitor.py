@@ -5,9 +5,9 @@ import asyncio
 import os
 import json
 import re
-import logging
 
 from dotenv import load_dotenv
+from loguru import logger
 from telethon import TelegramClient, events
 
 load_dotenv()
@@ -16,17 +16,9 @@ _BASE_DIR = os.path.normpath(os.path.join(os.path.dirname(__file__), ".."))
 LOGS_DIR = os.path.join(_BASE_DIR, "logs")
 SESSIONS_DIR = os.path.join(_BASE_DIR, "tg_sessions")
 DEFAULT_MESSAGES_FILE = os.path.join(LOGS_DIR, "channel_messages.json")
-DEFAULT_LOG_FILE = os.path.join(LOGS_DIR, "channel_msg_logs.log")
 
-_log_fmt = '%(asctime)s - %(levelname)s - %(message)s'
 os.makedirs(LOGS_DIR, exist_ok=True)
 os.makedirs(SESSIONS_DIR, exist_ok=True)
-_fh = logging.FileHandler(DEFAULT_LOG_FILE, encoding="utf-8")
-_ch = logging.StreamHandler()
-for _h in (_fh, _ch):
-    _h.setFormatter(logging.Formatter(_log_fmt))
-logging.basicConfig(level=logging.INFO, format=_log_fmt, handlers=[_fh, _ch])
-logging.getLogger("telethon").setLevel(logging.WARNING)
 
 def _extract_tme_id(text):
     """Извлекает первую ссылку t.me из текста, возвращает message_id."""
@@ -79,7 +71,7 @@ class TgChannelMonitor:
                     elif isinstance(v, dict):
                         self.messages_data[root_id] = {int(k2): v2 for k2, v2 in v.items()}
             except Exception as e:
-                logging.error(f"Ошибка загрузки JSON: {e}")
+                logger.error(f"Ошибка загрузки JSON: {e}")
                 self.messages_data = {}
                 self._save_messages_data()
         else:
@@ -150,7 +142,7 @@ class TgChannelMonitor:
         
         # Если есть несколько ссылок, обрабатываем каждую отдельно (пропускаем проверку processed_ids)
         if len(all_link_ids) > 1:
-            logging.info(f"Обнаружено {len(all_link_ids)} ссылок в сообщении {msg.id}, обрабатываю каждую отдельно")
+            logger.info(f"Обнаружено {len(all_link_ids)} ссылок в сообщении {msg.id}, обрабатываю каждую отдельно")
             for link_id in all_link_ids:
                 await self._save_message_for_link_id(msg, text, link_id, is_edit)
             # Помечаем сообщение как обработанное после обработки всех ссылок
@@ -159,10 +151,10 @@ class TgChannelMonitor:
         
         # Обычная обработка (одна ссылка или нет ссылок) - проверяем processed_ids
         if not is_edit and msg.id in self.processed_ids:
-            logging.info("skip by processed_ids (new): msg.id=%s", msg.id)
+            logger.info("skip by processed_ids (new): msg.id=%s", msg.id)
             return
         if is_edit and msg.id not in self.processed_ids:
-            logging.info("skip by processed_ids (edit without base): msg.id=%s", msg.id)
+            logger.info("skip by processed_ids (edit without base): msg.id=%s", msg.id)
             return
 
         # Обычная обработка (одна ссылка или нет ссылок)
@@ -203,12 +195,12 @@ class TgChannelMonitor:
                         self.messages_data[root_id] = {root_id: root_msg.text}
                         self.processed_ids.add(root_id)
                     else:
-                        logging.warning(f"Не удалось получить root сообщение {root_id} для сообщения {msg.id}")
+                        logger.warning(f"Не удалось получить root сообщение {root_id} для сообщения {msg.id}")
                         # Создаем запись с пустым текстом root, чтобы сохранить реплай
                         self.messages_data[root_id] = {root_id: "[root не найден]"}
                         self.processed_ids.add(root_id)
                 except Exception as e:
-                    logging.warning(f"Ошибка при получении root сообщения {root_id} для сообщения {msg.id}: {e}")
+                    logger.warning(f"Ошибка при получении root сообщения {root_id} для сообщения {msg.id}: {e}")
                     # Создаем запись с пустым текстом root, чтобы сохранить реплай
                     self.messages_data[root_id] = {root_id: "[root не найден]"}
                     self.processed_ids.add(root_id)
@@ -228,7 +220,7 @@ class TgChannelMonitor:
         prefix = "[EDIT]" if is_edit else "[NEW]"
         timestamp = msg.date.strftime("%Y-%m-%d %H:%M:%S")
         reply_info = f" | ROOT: {root_id}" if root_id != msg.id else ""
-        logging.info(f"{prefix} {timestamp} | ID: {msg.id}{reply_info} | {text[:50]}")
+        logger.info(f"{prefix} {timestamp} | ID: {msg.id}{reply_info} | {text[:50]}")
         self.processed_ids.add(msg.id)
 
     async def _save_message_for_link_id(self, msg, text, link_id, is_edit=False):
@@ -248,11 +240,11 @@ class TgChannelMonitor:
                     self.messages_data[root_id] = {root_id: root_msg.text}
                     self.processed_ids.add(root_id)
                 else:
-                    logging.warning(f"Не удалось получить root сообщение {root_id} для ссылки в сообщении {msg.id}")
+                    logger.warning(f"Не удалось получить root сообщение {root_id} для ссылки в сообщении {msg.id}")
                     self.messages_data[root_id] = {root_id: "[root не найден]"}
                     self.processed_ids.add(root_id)
             except Exception as e:
-                logging.warning(f"Ошибка при получении root сообщения {root_id} для ссылки в сообщении {msg.id}: {e}")
+                logger.warning(f"Ошибка при получении root сообщения {root_id} для ссылки в сообщении {msg.id}: {e}")
                 self.messages_data[root_id] = {root_id: "[root не найден]"}
                 self.processed_ids.add(root_id)
         
@@ -281,7 +273,7 @@ class TgChannelMonitor:
         
         prefix = "[EDIT]" if is_edit else "[NEW]"
         timestamp = msg.date.strftime("%Y-%m-%d %H:%M:%S")
-        logging.info(f"{prefix} {timestamp} | ID: {msg.id} | LINK: {link_id} | {text[:50]}")
+        logger.info(f"{prefix} {timestamp} | ID: {msg.id} | LINK: {link_id} | {text[:50]}")
 
     async def run(self):
         if self.messages_queue is None:
@@ -313,44 +305,44 @@ class TgChannelMonitor:
             # Пробуем получить канал для проверки
             try:
                 channel_entity = await self.client.get_entity(channel_id)
-                logging.info(f"Мониторинг канала: {getattr(channel_entity, 'title', channel_id)}")
+                logger.info(f"Мониторинг канала: {getattr(channel_entity, 'title', channel_id)}")
             except Exception as e:
-                logging.warning(f"Не удалось получить канал {channel_id}: {e}")
+                logger.warning(f"Не удалось получить канал {channel_id}: {e}")
                 # Пробуем найти через диалоги
                 async for dialog in self.client.iter_dialogs():
                     if dialog.id == channel_id or (hasattr(dialog.entity, 'username') and dialog.entity.username == channel_id.lstrip('@')):
                         channel_entity = dialog.entity
-                        logging.info(f"Найден канал через диалоги: {getattr(channel_entity, 'title', channel_id)}")
+                        logger.info(f"Найден канал через диалоги: {getattr(channel_entity, 'title', channel_id)}")
                         break
                 else:
-                    logging.error(f"Канал {channel_id} не найден")
+                    logger.error(f"Канал {channel_id} не найден")
                     return
         except Exception as e:
-            logging.error(f"Ошибка при получении канала: {e}")
+            logger.error(f"Ошибка при получении канала: {e}")
             return
 
         @self.client.on(events.NewMessage(chats=channel_entity))
         async def on_new_message(event):
-            logging.info(f"Получено новое сообщение: ID={event.message.id}, reply_to={event.message.reply_to}")
+            logger.info(f"Получено новое сообщение: ID={event.message.id}, reply_to={event.message.reply_to}")
             try:
                 await self._save_message(event.message, is_edit=False)
             except Exception as e:
-                logging.error(f"Ошибка при сохранении сообщения {event.message.id}: {e}")
+                logger.error(f"Ошибка при сохранении сообщения {event.message.id}: {e}")
                 import traceback
-                logging.error(traceback.format_exc())
+                logger.error(traceback.format_exc())
 
         @self.client.on(events.MessageEdited(chats=channel_entity))
         async def on_edit(event):
             if not event.message.out:
-                logging.info(f"Получено редактирование сообщения: ID={event.message.id}, reply_to={event.message.reply_to}")
+                logger.info(f"Получено редактирование сообщения: ID={event.message.id}, reply_to={event.message.reply_to}")
                 try:
                     await self._save_message(event.message, is_edit=True)
                 except Exception as e:
-                    logging.error(f"Ошибка при сохранении редактирования {event.message.id}: {e}")
+                    logger.error(f"Ошибка при сохранении редактирования {event.message.id}: {e}")
                     import traceback
-                    logging.error(traceback.format_exc())
+                    logger.error(traceback.format_exc())
 
-        logging.info("Хендлер зарегистрирован, ожидание сообщений...")
+        logger.info("Хендлер зарегистрирован, ожидание сообщений...")
         await self.client.run_until_disconnected()
 
 

@@ -4,8 +4,9 @@
 Поля order: orderId, symbol, orderStatus (New, PartiallyFilled, Filled, Cancelled),
   cumExecQty, avgPrice, qty, side, reduceOnly
 """
-import logging
 import asyncio
+
+from loguru import logger
 
 from exchanges.bybit.trade import BybitTrade
 from tg_bot.notify import send_message
@@ -30,7 +31,7 @@ def _find_trade_by_order_id(trades_dict: dict, order_id: str, mapped_symbol: str
                     if entry_info[0].get("ordId") == order_id or entry_info[1].get("ordId") == order_id:
                         return msg_id, trade
             else:
-                logging.debug("Bybit ws: trade %s has empty/None entry when matching orderId=%s: %r", msg_id, order_id, trade)
+                logger.debug("Bybit ws: trade %s has empty/None entry when matching orderId=%s: %r", msg_id, order_id, trade)
 
             tp = trade.get("tp_info")
             if tp is not None:
@@ -46,7 +47,7 @@ def _find_trade_by_order_id(trades_dict: dict, order_id: str, mapped_symbol: str
                 return msg_id, trade
 
         except Exception as e:
-            logging.exception(
+            logger.exception(
                 "Bybit ws: error in _find_trade_by_order_id for msg_id=%s, order_id=%s, trade=%r",
                 msg_id,
                 order_id,
@@ -72,23 +73,23 @@ async def ws_process(data: list, trades_dict: dict, bybit_trade: BybitTrade):
 
         trade_key, trade = _find_trade_by_order_id(trades_dict, order_id, symbol)
         if trade_key is None:
-            logging.debug("Bybit ws: no trade found for symbol=%s order_id=%s item=%r", symbol, order_id, item)
+            logger.debug("Bybit ws: no trade found for symbol=%s order_id=%s item=%r", symbol, order_id, item)
             continue
         effective_trade_info = trade
         instrument_info = trade.get("instrument_info")
         if not instrument_info:
-            logging.warning("%s Bybit ws_process: no instrument_info for trade %s", symbol, trade_key)
+            logger.warning("%s Bybit ws_process: no instrument_info for trade %s", symbol, trade_key)
             continue
 
         if len(trade["entry"]) == 1:
             if trade["entry_info"]["ordId"] == order_id:
                 if order_status in ("Cancelled", "Rejected"):
-                    logging.info(f"✅ {symbol} ENTRY {order_status} order {order_id}")
+                    logger.info(f"✅ {symbol} ENTRY {order_status} order {order_id}")
                     trade["status"] = "cancelled"
                     pprint(trade, indent=2, width=80, sort_dicts=False)
 
                 elif order_status == "PartiallyFilled":
-                    logging.info(f"✅ {symbol} ENTRY {order_status} order {order_id} fill size: {cum_exec_qty}")
+                    logger.info(f"✅ {symbol} ENTRY {order_status} order {order_id} fill size: {cum_exec_qty}")
                     trade["current_fill_size"] = float(cum_exec_qty or "0")
                     trade["entry_info"]["price_filled"] = avg_price
                     trade["entry_info"]["size_filled"] = cum_exec_qty
@@ -96,7 +97,7 @@ async def ws_process(data: list, trades_dict: dict, bybit_trade: BybitTrade):
                     trade["status"] = "filled"
 
                 if order_status == "Filled":
-                    logging.info(f"✅ {symbol} ENTRY {order_status} order {order_id} fill size: {cum_exec_qty}")
+                    logger.info(f"✅ {symbol} ENTRY {order_status} order {order_id} fill size: {cum_exec_qty}")
                     trade["current_fill_size"] = float(cum_exec_qty or "0")
                     trade["entry_info"]["price_filled"] = avg_price
                     trade["entry_info"]["size_filled"] = cum_exec_qty
@@ -117,7 +118,7 @@ async def ws_process(data: list, trades_dict: dict, bybit_trade: BybitTrade):
                                     tp_ids.append(t["ordId"])
                         if tp_ids:
                             await bybit_trade.cancel_orders(trades_dict=trades_dict, instrument_id=symbol, ord_ids=tp_ids)
-                    logging.info(f"trade {trade}")
+                    logger.info(f"trade {trade}")
                     await bybit_trade.place_stop_loss_order(trades_dict=trades_dict, instrument_id=symbol, trade_info=effective_trade_info, instrument_info=instrument_info)
                     await bybit_trade.place_tps_first_limit_order(trades_dict=trades_dict, instrument_id=symbol, trade_info=effective_trade_info, instrument_info=instrument_info)
                     pprint(trade, indent=2, width=80, sort_dicts=False)
@@ -125,11 +126,11 @@ async def ws_process(data: list, trades_dict: dict, bybit_trade: BybitTrade):
         elif len(trade["entry"]) == 2:
             if trade["entry_info"][0]["ordId"] == order_id:
                 if order_status in ("Cancelled", "Rejected"):
-                    logging.info(f"✅ {symbol} ENTRY1 {order_status} order {order_id}")
+                    logger.info(f"✅ {symbol} ENTRY1 {order_status} order {order_id}")
                     trade["status"] = "cancelled"
 
                 elif order_status == "PartiallyFilled":
-                    logging.info(f"✅ {symbol} ENTRY1 {order_status} order {order_id} fill size: {cum_exec_qty}")
+                    logger.info(f"✅ {symbol} ENTRY1 {order_status} order {order_id} fill size: {cum_exec_qty}")
                     trade["current_fill_size"] = float(cum_exec_qty or "0")
                     trade["entry_info"][0]["price_filled"] = avg_price
                     trade["entry_info"][0]["size_filled"] = cum_exec_qty
@@ -137,7 +138,7 @@ async def ws_process(data: list, trades_dict: dict, bybit_trade: BybitTrade):
                     trade["status"] = "filled"
 
                 if order_status == "Filled":
-                    logging.info(f"✅ {symbol} ENTRY1 {order_status} order {order_id} fill size: {cum_exec_qty}")
+                    logger.info(f"✅ {symbol} ENTRY1 {order_status} order {order_id} fill size: {cum_exec_qty}")
                     trade["current_fill_size"] = float(cum_exec_qty or "0")
                     trade["entry_info"][0]["price_filled"] = avg_price
                     trade["entry_info"][0]["size_filled"] = cum_exec_qty
@@ -161,7 +162,7 @@ async def ws_process(data: list, trades_dict: dict, bybit_trade: BybitTrade):
 
             elif trade["entry_info"][1]["ordId"] == order_id:
                 if order_status in ("Cancelled", "Rejected"):
-                    logging.info(f"✅ {symbol} ENTRY2 {order_status} order {order_id}")
+                    logger.info(f"✅ {symbol} ENTRY2 {order_status} order {order_id}")
                     trade["status"] = "cancelled"
                     if trade.get("sl_info", None) is not None:
                         await bybit_trade.cancel_orders(trades_dict=trades_dict, instrument_id=symbol, ord_ids=[trade["sl_info"]["ordId"]])
@@ -175,7 +176,7 @@ async def ws_process(data: list, trades_dict: dict, bybit_trade: BybitTrade):
                     pprint(trade, indent=2, width=80, sort_dicts=False)
 
                 elif order_status == "PartiallyFilled":
-                    logging.info(f"✅ {symbol} ENTRY2 {order_status} order {order_id} fill size: {cum_exec_qty}")
+                    logger.info(f"✅ {symbol} ENTRY2 {order_status} order {order_id} fill size: {cum_exec_qty}")
                     entry1_sz = float(trade["entry_info"][0].get("size_filled", 0) or 0)
                     trade["current_fill_size"] = entry1_sz + float(cum_exec_qty or "0")
                     trade["entry_info"][1]["price_filled"] = avg_price
@@ -184,7 +185,7 @@ async def ws_process(data: list, trades_dict: dict, bybit_trade: BybitTrade):
                     trade["status"] = "filled"
 
                 if order_status == "Filled":
-                    logging.info(f"✅ {symbol} ENTRY2 {order_status} order {order_id} fill size: {cum_exec_qty}")
+                    logger.info(f"✅ {symbol} ENTRY2 {order_status} order {order_id} fill size: {cum_exec_qty}")
                     entry1_sz = float(trade["entry_info"][0].get("size_filled", 0) or 0)
                     trade["current_fill_size"] = entry1_sz + float(cum_exec_qty or "0")
                     trade["entry_info"][1]["price_filled"] = avg_price
@@ -215,39 +216,39 @@ async def ws_process(data: list, trades_dict: dict, bybit_trade: BybitTrade):
             if len(tp_list) == 1:
                 if tp_list[0].get("ordId") == order_id:
                     if order_status in ("Cancelled", "Rejected"):
-                        logging.info(f"✅ {symbol} TP {order_status} order {order_id}")
+                        logger.info(f"✅ {symbol} TP {order_status} order {order_id}")
                         del trade["tp_info"]
                     elif order_status == "PartiallyFilled":
-                        logging.info(f"✅ {symbol} TP {order_status} order {order_id} fill size: {cum_exec_qty}")
+                        logger.info(f"✅ {symbol} TP {order_status} order {order_id} fill size: {cum_exec_qty}")
                         trade["current_fill_size"] -= float(cum_exec_qty or "0")
                         tp_list[0]["price_filled"] = avg_price
                         tp_list[0]["size_filled"] = cum_exec_qty
                         tp_list[0]["status"] = {order_status}
                     elif order_status == "Filled":
-                        logging.info(f"✅ {symbol} TP {order_status} order {order_id} fill size: {cum_exec_qty}")
+                        logger.info(f"✅ {symbol} TP {order_status} order {order_id} fill size: {cum_exec_qty}")
                         trade["current_fill_size"] -= float(cum_exec_qty or "0")
                         tp_list[0]["price_filled"] = avg_price
                         tp_list[0]["size_filled"] = cum_exec_qty
                         tp_list[0]["status"] = {order_status}
                         if trade.get("sl_info", None) is not None:
                             await bybit_trade.cancel_orders(trades_dict=trades_dict, instrument_id=symbol, ord_ids=[trade["sl_info"]["ordId"]])
-                        logging.info(f"✅✅✅ {symbol} closes all position by TP")
+                        logger.info(f"✅✅✅ {symbol} closes all position by TP")
                         trade["status"] = "closed"
                         await send_message(f"✅ TP {symbol} — closed by TP")
 
             elif len(tp_list) == 2:
                 if tp_list[0].get("ordId") == order_id:
                     if order_status in ("Cancelled", "Rejected"):
-                        logging.info(f"✅ {symbol} TP1 {order_status} order {order_id}")
+                        logger.info(f"✅ {symbol} TP1 {order_status} order {order_id}")
                         del trade["tp_info"]
                     elif order_status == "PartiallyFilled":
-                        logging.info(f"✅ {symbol} TP1 {order_status} order {order_id} fill size: {cum_exec_qty}")
+                        logger.info(f"✅ {symbol} TP1 {order_status} order {order_id} fill size: {cum_exec_qty}")
                         trade["current_fill_size"] -= float(cum_exec_qty or "0")
                         tp_list[0]["price_filled"] = avg_price
                         tp_list[0]["size_filled"] = cum_exec_qty
                         tp_list[0]["status"] = {order_status}
                     elif order_status == "Filled":
-                        logging.info(f"✅ {symbol} TP1 {order_status} order {order_id} fill size: {cum_exec_qty}")
+                        logger.info(f"✅ {symbol} TP1 {order_status} order {order_id} fill size: {cum_exec_qty}")
                         trade["current_fill_size"] -= float(cum_exec_qty or "0")
                         tp_list[0]["price_filled"] = avg_price
                         tp_list[0]["size_filled"] = cum_exec_qty
@@ -260,39 +261,39 @@ async def ws_process(data: list, trades_dict: dict, bybit_trade: BybitTrade):
 
                 elif tp_list[1].get("ordId") == order_id:
                     if order_status in ("Cancelled", "Rejected"):
-                        logging.info(f"✅ {symbol} TP2 {order_status} order {order_id}")
+                        logger.info(f"✅ {symbol} TP2 {order_status} order {order_id}")
                         del trade["tp_info"]
                     elif order_status == "PartiallyFilled":
-                        logging.info(f"✅ {symbol} TP2 {order_status} order {order_id} fill size: {cum_exec_qty}")
+                        logger.info(f"✅ {symbol} TP2 {order_status} order {order_id} fill size: {cum_exec_qty}")
                         trade["current_fill_size"] -= float(cum_exec_qty or "0")
                         tp_list[1]["price_filled"] = avg_price
                         tp_list[1]["size_filled"] = cum_exec_qty
                         tp_list[1]["status"] = {order_status}
                     elif order_status == "Filled":
-                        logging.info(f"✅ {symbol} TP2 {order_status} order {order_id} fill size: {cum_exec_qty}")
+                        logger.info(f"✅ {symbol} TP2 {order_status} order {order_id} fill size: {cum_exec_qty}")
                         trade["current_fill_size"] -= float(cum_exec_qty or "0")
                         tp_list[1]["price_filled"] = avg_price
                         tp_list[1]["size_filled"] = cum_exec_qty
                         tp_list[1]["status"] = {order_status}
                         if trade.get("sl_info", None) is not None:
                             await bybit_trade.cancel_orders(trades_dict=trades_dict, instrument_id=symbol, ord_ids=[trade["sl_info"]["ordId"]])
-                        logging.info(f"✅✅✅ {symbol} closes all position by TP")
+                        logger.info(f"✅✅✅ {symbol} closes all position by TP")
                         trade["status"] = "closed"
                         await send_message(f"✅ TP2 {symbol} — closed by TP")
 
             elif len(tp_list) == 3:
                 if tp_list[0].get("ordId") == order_id:
                     if order_status in ("Cancelled", "Rejected"):
-                        logging.info(f"✅ {symbol} TP1 {order_status} order {order_id}")
+                        logger.info(f"✅ {symbol} TP1 {order_status} order {order_id}")
                         del trade["tp_info"]
                     elif order_status == "PartiallyFilled":
-                        logging.info(f"✅ {symbol} TP1 {order_status} order {order_id} fill size: {cum_exec_qty}")
+                        logger.info(f"✅ {symbol} TP1 {order_status} order {order_id} fill size: {cum_exec_qty}")
                         trade["current_fill_size"] -= float(cum_exec_qty or "0")
                         tp_list[0]["price_filled"] = avg_price
                         tp_list[0]["size_filled"] = cum_exec_qty
                         tp_list[0]["status"] = {order_status}
                     elif order_status == "Filled":
-                        logging.info(f"✅ {symbol} TP1 {order_status} order {order_id} fill size: {cum_exec_qty}")
+                        logger.info(f"✅ {symbol} TP1 {order_status} order {order_id} fill size: {cum_exec_qty}")
                         trade["current_fill_size"] -= float(cum_exec_qty or "0")
                         tp_list[0]["price_filled"] = avg_price
                         tp_list[0]["size_filled"] = cum_exec_qty
@@ -306,16 +307,16 @@ async def ws_process(data: list, trades_dict: dict, bybit_trade: BybitTrade):
 
                 elif tp_list[1].get("ordId") == order_id:
                     if order_status in ("Cancelled", "Rejected"):
-                        logging.info(f"✅ {symbol} TP2 {order_status} order {order_id}")
+                        logger.info(f"✅ {symbol} TP2 {order_status} order {order_id}")
                         del trade["tp_info"]
                     elif order_status == "PartiallyFilled":
-                        logging.info(f"✅ {symbol} TP2 {order_status} order {order_id} fill size: {cum_exec_qty}")
+                        logger.info(f"✅ {symbol} TP2 {order_status} order {order_id} fill size: {cum_exec_qty}")
                         trade["current_fill_size"] -= float(cum_exec_qty or "0")
                         tp_list[1]["price_filled"] = avg_price
                         tp_list[1]["size_filled"] = cum_exec_qty
                         tp_list[1]["status"] = {order_status}
                     elif order_status == "Filled":
-                        logging.info(f"✅ {symbol} TP2 {order_status} order {order_id} fill size: {cum_exec_qty}")
+                        logger.info(f"✅ {symbol} TP2 {order_status} order {order_id} fill size: {cum_exec_qty}")
                         trade["current_fill_size"] -= float(cum_exec_qty or "0")
                         tp_list[1]["price_filled"] = avg_price
                         tp_list[1]["size_filled"] = cum_exec_qty
@@ -329,23 +330,23 @@ async def ws_process(data: list, trades_dict: dict, bybit_trade: BybitTrade):
 
                 elif tp_list[2].get("ordId") == order_id:
                     if order_status in ("Cancelled", "Rejected"):
-                        logging.info(f"✅ {symbol} TP3 {order_status} order {order_id}")
+                        logger.info(f"✅ {symbol} TP3 {order_status} order {order_id}")
                         del trade["tp_info"]
                     elif order_status == "PartiallyFilled":
-                        logging.info(f"✅ {symbol} TP3 {order_status} order {order_id} fill size: {cum_exec_qty}")
+                        logger.info(f"✅ {symbol} TP3 {order_status} order {order_id} fill size: {cum_exec_qty}")
                         trade["current_fill_size"] -= float(cum_exec_qty or "0")
                         tp_list[2]["price_filled"] = avg_price
                         tp_list[2]["size_filled"] = cum_exec_qty
                         tp_list[2]["status"] = {order_status}
                     elif order_status == "Filled":
-                        logging.info(f"✅ {symbol} TP3 {order_status} order {order_id} fill size: {cum_exec_qty}")
+                        logger.info(f"✅ {symbol} TP3 {order_status} order {order_id} fill size: {cum_exec_qty}")
                         trade["current_fill_size"] -= float(cum_exec_qty or "0")
                         tp_list[2]["price_filled"] = avg_price
                         tp_list[2]["size_filled"] = cum_exec_qty
                         tp_list[2]["status"] = {order_status}
                         if trade.get("sl_info", None) is not None:
                             await bybit_trade.cancel_orders(trades_dict=trades_dict, instrument_id=symbol, ord_ids=[trade["sl_info"]["ordId"]])
-                        logging.info(f"✅✅✅ {symbol} closes all position by TP")
+                        logger.info(f"✅✅✅ {symbol} closes all position by TP")
                         trade["status"] = "closed"
                         await send_message(f"✅ TP {symbol} — closed by TP")
                         pprint(trade, indent=2, width=80, sort_dicts=False)
@@ -354,16 +355,16 @@ async def ws_process(data: list, trades_dict: dict, bybit_trade: BybitTrade):
         if trade.get("sl_info", None) is not None:
             if trade["sl_info"]["ordId"] == order_id:
                 if order_status in ("Cancelled", "Rejected"):
-                    logging.info(f"✅ {symbol} SL {order_status} order {order_id}")
+                    logger.info(f"✅ {symbol} SL {order_status} order {order_id}")
                     del trade["sl_info"]
                 elif order_status == "PartiallyFilled":
-                    logging.info(f"✅ {symbol} SL {order_status} order {order_id} fill size: {cum_exec_qty}")
+                    logger.info(f"✅ {symbol} SL {order_status} order {order_id} fill size: {cum_exec_qty}")
                     trade["current_fill_size"] -= float(cum_exec_qty or "0")
                     trade["sl_info"]["price_filled"] = avg_price
                     trade["sl_info"]["size_filled"] = cum_exec_qty
                     trade["sl_info"]["status"] = {order_status}
                 elif order_status == "Filled":
-                    logging.info(f"✅ {symbol} SL {order_status} order {order_id} fill size: {cum_exec_qty}")
+                    logger.info(f"✅ {symbol} SL {order_status} order {order_id} fill size: {cum_exec_qty}")
                     trade["current_fill_size"] -= float(cum_exec_qty or "0")
                     trade["sl_info"]["price_filled"] = avg_price
                     trade["sl_info"]["size_filled"] = cum_exec_qty
@@ -375,7 +376,7 @@ async def ws_process(data: list, trades_dict: dict, bybit_trade: BybitTrade):
                                 tp_ids.append(t["ordId"])
                         if tp_ids:
                             await bybit_trade.cancel_orders(trades_dict=trades_dict, instrument_id=symbol, ord_ids=tp_ids)
-                    logging.info(f"✅✅✅ {symbol} closes all position by SL")
+                    logger.info(f"✅✅✅ {symbol} closes all position by SL")
                     trades_dict[effective_trade_info["message_id"]]["status"] = "closed"
                     await send_message(f"🛑 SL {symbol} — closed by SL")
                     pprint(trade, indent=2, width=80, sort_dicts=False)

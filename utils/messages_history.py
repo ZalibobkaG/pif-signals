@@ -6,9 +6,9 @@ import asyncio
 import os
 import json
 import re
-import logging
 
 from dotenv import load_dotenv
+from loguru import logger
 from telethon import TelegramClient, events
 
 load_dotenv()
@@ -18,11 +18,8 @@ LOGS_DIR = os.path.join(_BASE_DIR, "logs")
 SESSIONS_DIR = os.path.join(_BASE_DIR, "tg_sessions")
 HISTORY_FILE = os.path.join(LOGS_DIR, "messages_history.json")
 
-_log_fmt = '%(asctime)s - %(levelname)s - %(message)s'
 os.makedirs(LOGS_DIR, exist_ok=True)
 os.makedirs(SESSIONS_DIR, exist_ok=True)
-logging.basicConfig(level=logging.INFO, format=_log_fmt)
-logging.getLogger("telethon").setLevel(logging.WARNING)
 
 
 def _extract_tme_id(text):
@@ -64,7 +61,7 @@ class MessagesHistory:
                     elif isinstance(v, dict):
                         self.messages_data[root_id] = {int(k2): v2 for k2, v2 in v.items()}
             except Exception as e:
-                logging.error(f"Ошибка загрузки JSON: {e}")
+                logger.error(f"Ошибка загрузки JSON: {e}")
                 self.messages_data = {}
                 self._save_messages_data()
         else:
@@ -158,11 +155,11 @@ class MessagesHistory:
                         self.messages_data[root_id] = {root_id: root_msg.text}
                         self.processed_ids.add(root_id)
                     else:
-                        logging.warning(f"Не удалось получить root сообщение {root_id} для сообщения {msg.id}")
+                        logger.warning(f"Не удалось получить root сообщение {root_id} для сообщения {msg.id}")
                         self.messages_data[root_id] = {root_id: "[root не найден]"}
                         self.processed_ids.add(root_id)
                 except Exception as e:
-                    logging.warning(f"Ошибка при получении root сообщения {root_id} для сообщения {msg.id}: {e}")
+                    logger.warning(f"Ошибка при получении root сообщения {root_id} для сообщения {msg.id}: {e}")
                     self.messages_data[root_id] = {root_id: "[root не найден]"}
                     self.processed_ids.add(root_id)
             elif isinstance(self.messages_data[root_id], str):
@@ -176,7 +173,7 @@ class MessagesHistory:
         prefix = "[EDIT]" if is_edit else "[NEW]"
         timestamp = msg.date.strftime("%Y-%m-%d %H:%M:%S")
         reply_info = f" | ROOT: {root_id}" if root_id != msg.id else ""
-        logging.info(f"{prefix} {timestamp} | ID: {msg.id}{reply_info} | {text[:50]}")
+        logger.info(f"{prefix} {timestamp} | ID: {msg.id}{reply_info} | {text[:50]}")
         self.processed_ids.add(msg.id)
 
     async def run(self):
@@ -204,27 +201,27 @@ class MessagesHistory:
             
             try:
                 channel_entity = await self.client.get_entity(channel_id)
-                logging.info(f"История канала: {getattr(channel_entity, 'title', channel_id)}")
+                logger.info(f"История канала: {getattr(channel_entity, 'title', channel_id)}")
             except Exception as e:
-                logging.warning(f"Не удалось получить канал {channel_id}: {e}")
+                logger.warning(f"Не удалось получить канал {channel_id}: {e}")
                 async for dialog in self.client.iter_dialogs():
                     if dialog.id == channel_id or (hasattr(dialog.entity, 'username') and dialog.entity.username == channel_id.lstrip('@')):
                         channel_entity = dialog.entity
-                        logging.info(f"Найден канал через диалоги: {getattr(channel_entity, 'title', channel_id)}")
+                        logger.info(f"Найден канал через диалоги: {getattr(channel_entity, 'title', channel_id)}")
                         break
                 else:
-                    logging.error(f"Канал {channel_id} не найден")
+                    logger.error(f"Канал {channel_id} не найден")
                     return
         except Exception as e:
-            logging.error(f"Ошибка при получении канала: {e}")
+            logger.error(f"Ошибка при получении канала: {e}")
             return
 
-        logging.info("Загружаю всю историю канала...")
+        logger.info("Загружаю всю историю канала...")
         all_messages = []
         async for msg in self.client.iter_messages(channel_entity):
             if msg.id not in self.processed_ids:
                 all_messages.append(msg)
-        logging.info(f"Собрано {len(all_messages)} новых сообщений, сортирую по ID (от старых к новым)...")
+        logger.info(f"Собрано {len(all_messages)} новых сообщений, сортирую по ID (от старых к новым)...")
         all_messages.sort(key=lambda m: m.id)
         
         count = 0
@@ -233,10 +230,10 @@ class MessagesHistory:
                 await self._save_message(msg, is_edit=False)
                 count += 1
                 if count % 100 == 0:
-                    logging.info(f"Обработано {count}/{len(all_messages)} сообщений...")
+                    logger.info(f"Обработано {count}/{len(all_messages)} сообщений...")
             except Exception as e:
-                logging.error(f"Ошибка при сохранении сообщения {msg.id}: {e}")
-        logging.info(f"История загружена: обработано {count} новых сообщений")
+                logger.error(f"Ошибка при сохранении сообщения {msg.id}: {e}")
+        logger.info(f"История загружена: обработано {count} новых сообщений")
         await self.client.disconnect()
 
 

@@ -1,6 +1,7 @@
 """Отправка сообщения разрешённому юзеру (TG_USERNAME)."""
-import logging
 import os
+
+from loguru import logger
 import uuid
 
 import aiohttp
@@ -31,13 +32,13 @@ async def send_message(text: str) -> bool:
     """
     chat_id = _resolve_chat_id()
     if tg_context.bot_instance is None or chat_id is None:
-        logging.warning("tg_bot: send_message — бот или chat_id не заданы (задай TG_NOTIFY_CHAT_ID в .env или напиши боту)")
+        logger.warning("tg_bot: send_message — бот или chat_id не заданы (задай TG_NOTIFY_CHAT_ID в .env или напиши боту)")
         return False
     try:
         await tg_context.bot_instance.send_message(chat_id, text)
         return True
     except Exception as e:
-        logging.error("tg_bot: send_message failed: %s", e)
+        logger.error("tg_bot: send_message failed: %s", e)
         return False
 
 
@@ -59,7 +60,7 @@ async def send_message_with_actions(text: str) -> bool:
     """
     chat_id = _resolve_chat_id()
     if tg_context.bot_instance is None or chat_id is None:
-        logging.warning("tg_bot: send_message_with_actions — бот или chat_id не заданы")
+        logger.warning("tg_bot: send_message_with_actions — бот или chat_id не заданы")
         return False
     try:
         await tg_context.bot_instance.send_message(
@@ -69,7 +70,7 @@ async def send_message_with_actions(text: str) -> bool:
         )
         return True
     except Exception as e:
-        logging.error("tg_bot: send_message_with_actions failed: %s", e)
+        logger.error("tg_bot: send_message_with_actions failed: %s", e)
         return False
 
 
@@ -129,7 +130,7 @@ async def send_ai_signal(ai_result: dict) -> None:
     chat_id = _resolve_chat_id()
     token = os.environ.get("TG_BOT_TOKEN", "").strip()
     if chat_id is None or not token:
-        logging.warning("tg_bot: send_ai_signal — нет chat_id или TG_BOT_TOKEN")
+        logger.warning("tg_bot: send_ai_signal — нет chat_id или TG_BOT_TOKEN")
         return
 
     callback_id = uuid.uuid4().hex[:12]
@@ -171,9 +172,9 @@ async def send_ai_signal(ai_result: dict) -> None:
             async with session.post(url, json=payload) as resp:
                 if resp.status != 200:
                     body = await resp.text()
-                    logging.error("tg_bot: send_ai_signal raw sendMessage failed: %s %s", resp.status, body)
+                    logger.error("tg_bot: send_ai_signal raw sendMessage failed: %s %s", resp.status, body)
     except Exception as e:
-        logging.error("tg_bot: send_ai_signal raw sendMessage exception: %s", e)
+        logger.error("tg_bot: send_ai_signal raw sendMessage exception: %s", e)
 
 
 
