@@ -43,7 +43,7 @@ def update_coin_root(coin: str, root_id: int) -> None:
     _save(data)
 
 
-def get_latest_root_for_coin(coin: str) -> int | None:
+def get_latest_root_for_coin(coin: str):
     """Самый новый root_id по монете (максимальный ts). Если записей нет — None."""
     if not coin:
         return None
