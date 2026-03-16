@@ -9,6 +9,7 @@ from exchanges.bybit.trade import BybitTrade
 from exchanges.okx.ws_process import ws_process
 from tg_bot import context as tg_context
 from tg_bot.notify import send_message, send_ai_signal
+from utils.coin_root_history import update_coin_root
 
 
 async def okx_strategy_pool(ai_response_queue: Queue, user_choice_queue: Queue, trades_dict: dict, bybit_queue: Queue = None, okx_trade: OkxTrade = None, bybit_trade: BybitTrade = None, okx_ws_queue: Queue = None):
@@ -26,6 +27,10 @@ async def okx_strategy_pool(ai_response_queue: Queue, user_choice_queue: Queue, 
                     break
                 logger.info(f" ✅ okx_strategy_pool: new_order: {new_order}")
                 if isinstance(new_order, dict):
+                    coin = new_order.get("coin")
+                    msg_id = new_order.get("message_id")
+                    if coin and msg_id is not None:
+                        update_coin_root(coin, msg_id)
                     await send_ai_signal(new_order)
         except Exception as e:
             logger.exception("okx_strategy_pool send_ai_signal: %s", e)
