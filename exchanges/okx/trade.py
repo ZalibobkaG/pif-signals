@@ -210,8 +210,13 @@ class OkxTrade:
         side_to_close_position = "sell" if trade_info["side"] == "long" else "buy"
         trade = trades_dict[trade_info["message_id"]]
         total_size = float(trade["current_fill_size"])
+        # Фильтруем None из tp, чтобы не пытаться выставлять тейки по None
+        tp_levels = [tp for tp in (trade.get("tp") or []) if tp is not None]
+        if not tp_levels:
+            logger.warning(f"{instrument_id} OKX place_tps_first_limit_order: empty or None tp, skip")
+            return True
 
-        if len(trade["tp"]) == 1:
+        if len(tp_levels) == 1:
             try:
                 res = self.trade.set_order(
                     instId=instrument_id,
@@ -219,7 +224,7 @@ class OkxTrade:
                     ordType="limit",
                     tdMode="isolated",
                     sz=str(total_size),
-                    px=str(trade["tp"][0]),
+                    px=str(tp_levels[0]),
                 )
                 if res.get("code") == "0" and res.get("data"):
                     tp_id = res["data"][0].get("ordId")
@@ -229,13 +234,13 @@ class OkxTrade:
             except Exception as e:
                 logger.error(f"{instrument_id} Error placing first tp limit order: {e}")
         
-        elif len(trade["tp"]) == 2:
+        elif len(tp_levels) == 2:
             tp_first_size = self.round_tick(total_size * 0.5, lot_size)
             tp_second_size = self.round_tick(total_size - tp_first_size, lot_size)
             
             batch_orders = [
-                {"instId": instrument_id, "tdMode": "isolated", "side": side_to_close_position, "ordType": "limit", "sz": str(tp_first_size), "px": str(self.round_tick(trade["tp"][0], tick_size))},
-                {"instId": instrument_id, "tdMode": "isolated", "side": side_to_close_position, "ordType": "limit", "sz": str(tp_second_size), "px": str(self.round_tick(trade["tp"][1], tick_size))},
+                {"instId": instrument_id, "tdMode": "isolated", "side": side_to_close_position, "ordType": "limit", "sz": str(tp_first_size), "px": str(self.round_tick(tp_levels[0], tick_size))},
+                {"instId": instrument_id, "tdMode": "isolated", "side": side_to_close_position, "ordType": "limit", "sz": str(self.round_tick(tp_second_size, lot_size)), "px": str(self.round_tick(tp_levels[1], tick_size))},
             ]
             ord_ids = []
             try:
@@ -260,9 +265,9 @@ class OkxTrade:
             tp_third_size = self.round_tick(total_size - tp_first_size - tp_second_size, lot_size)
             
             batch_orders = [
-                {"instId": instrument_id, "tdMode": "isolated", "side": side_to_close_position, "ordType": "limit", "sz": str(tp_first_size), "px": str(self.round_tick(trade["tp"][0], tick_size))},
-                {"instId": instrument_id, "tdMode": "isolated", "side": side_to_close_position, "ordType": "limit", "sz": str(tp_second_size), "px": str(self.round_tick(trade["tp"][1], tick_size))},
-                {"instId": instrument_id, "tdMode": "isolated", "side": side_to_close_position, "ordType": "limit", "sz": str(tp_third_size), "px": str(self.round_tick(trade["tp"][2], tick_size))},
+                {"instId": instrument_id, "tdMode": "isolated", "side": side_to_close_position, "ordType": "limit", "sz": str(tp_first_size), "px": str(self.round_tick(tp_levels[0], tick_size))},
+                {"instId": instrument_id, "tdMode": "isolated", "side": side_to_close_position, "ordType": "limit", "sz": str(tp_second_size), "px": str(self.round_tick(tp_levels[1], tick_size))},
+                {"instId": instrument_id, "tdMode": "isolated", "side": side_to_close_position, "ordType": "limit", "sz": str(self.round_tick(tp_third_size, lot_size)), "px": str(self.round_tick(tp_levels[2], tick_size))},
             ]
             ord_ids = []
             try:

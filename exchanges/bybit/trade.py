@@ -293,8 +293,13 @@ class BybitTrade:
         side_to_close_position = "Sell" if trade_info["side"] == "long" else "Buy"
         trade = trades_dict[trade_info["message_id"]]
         total_size = float(trade["current_fill_size"])
+        # Фильтруем None из tp, чтобы не падать на round_tick(None)
+        tp_levels = [tp for tp in (trade.get("tp") or []) if tp is not None]
+        if not tp_levels:
+            logger.warning(f"{instrument_id} Bybit place_tps_first_limit_order: empty or None tp, skip")
+            return True
 
-        if len(trade["tp"]) == 1:
+        if len(tp_levels) == 1:
             try:
                 res = await asyncio.to_thread(
                     self.trade_session.place_order,
@@ -303,7 +308,7 @@ class BybitTrade:
                     side=side_to_close_position,
                     orderType="Limit",
                     qty=str(self.round_tick(total_size, qty_step)),
-                    price=str(self.round_tick(trade["tp"][0], tick_size)),
+                    price=str(self.round_tick(tp_levels[0], tick_size)),
                     reduceOnly=True,
                 )
                 if res.get("retCode") == 0 and res.get("result"):
@@ -320,8 +325,8 @@ class BybitTrade:
             tp_second_size = self.round_tick(total_size - tp_first_size, qty_step)
 
             request = [
-                {"symbol": instrument_id, "side": side_to_close_position, "orderType": "Limit", "qty": str(tp_first_size), "price": str(self.round_tick(trade["tp"][0], tick_size)), "reduceOnly": True},
-                {"symbol": instrument_id, "side": side_to_close_position, "orderType": "Limit", "qty": str(tp_second_size), "price": str(self.round_tick(trade["tp"][1], tick_size)), "reduceOnly": True},
+                {"symbol": instrument_id, "side": side_to_close_position, "orderType": "Limit", "qty": str(tp_first_size), "price": str(self.round_tick(tp_levels[0], tick_size)), "reduceOnly": True},
+                {"symbol": instrument_id, "side": side_to_close_position, "orderType": "Limit", "qty": str(tp_second_size), "price": str(self.round_tick(tp_levels[1], tick_size)), "reduceOnly": True},
             ]
             ord_ids = []
             try:
@@ -351,9 +356,9 @@ class BybitTrade:
             tp_third_size = self.round_tick(total_size - tp_first_size - tp_second_size, qty_step)
 
             request = [
-                {"symbol": instrument_id, "side": side_to_close_position, "orderType": "Limit", "qty": str(tp_first_size), "price": str(self.round_tick(trade["tp"][0], tick_size)), "reduceOnly": True},
-                {"symbol": instrument_id, "side": side_to_close_position, "orderType": "Limit", "qty": str(tp_second_size), "price": str(self.round_tick(trade["tp"][1], tick_size)), "reduceOnly": True},
-                {"symbol": instrument_id, "side": side_to_close_position, "orderType": "Limit", "qty": str(tp_third_size), "price": str(self.round_tick(trade["tp"][2], tick_size)), "reduceOnly": True},
+                {"symbol": instrument_id, "side": side_to_close_position, "orderType": "Limit", "qty": str(tp_first_size), "price": str(self.round_tick(tp_levels[0], tick_size)), "reduceOnly": True},
+                {"symbol": instrument_id, "side": side_to_close_position, "orderType": "Limit", "qty": str(tp_second_size), "price": str(self.round_tick(tp_levels[1], tick_size)), "reduceOnly": True},
+                {"symbol": instrument_id, "side": side_to_close_position, "orderType": "Limit", "qty": str(self.round_tick(tp_third_size, qty_step)), "price": str(self.round_tick(tp_levels[2], tick_size)), "reduceOnly": True},
             ]
             ord_ids = []
             try:
