@@ -9,7 +9,11 @@ router = Router(name="commands")
 
 @router.message(Command("start"))
 async def cmd_start(message: Message) -> None:
-    await message.answer("Бот запущен. Доступные команды: /start, /stop")
+    await message.answer(
+        "Бот запущен. Доступные команды: /start, /stop\n\n"
+        f"user_id: {message.from_user.id}\n"
+        f"chat_id: {message.chat.id}"
+    )
 
 
 @router.message(Command("stop"))
