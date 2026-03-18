@@ -136,9 +136,10 @@ async def okx_strategy_pool(ai_response_queue: Queue, user_choice_queue: Queue, 
                                 elif action == "enter_now":
                                     if trades_dict[new_order["message_id"]].get("sl_info") is None:
                                         logger.info(" ⛏️ OKX enter_now")
-                                        if len(trades_dict[new_order["message_id"]]["entry"]) == 1:
+                                        entry = trades_dict[new_order["message_id"]].get("entry") or []
+                                        if len(entry) == 1:
                                             await okx_trade.cancel_orders(trades_dict=trades_dict, instrument_id=okx_coin, ord_ids=[trades_dict[new_order["message_id"]]["entry_info"]["ordId"]])
-                                        elif len(trades_dict[new_order["message_id"]]["entry"]) == 2:
+                                        elif len(entry) == 2:
                                             ord_ids = [trades_dict[new_order["message_id"]]["entry_info"][0]["ordId"], trades_dict[new_order["message_id"]]["entry_info"][1]["ordId"]]
                                             await okx_trade.cancel_orders(trades_dict=trades_dict, instrument_id=okx_coin, ord_ids=ord_ids)
                                         available_info = trades_dict[new_order["message_id"]]["instrument_info"]
@@ -154,9 +155,10 @@ async def okx_strategy_pool(ai_response_queue: Queue, user_choice_queue: Queue, 
                                     if trades_dict[new_order["message_id"]].get("status") == "active":
                                         logger.info(" ⛏️ OKX cancel")
                                         ord_ids = []
-                                        if len(trades_dict[new_order["message_id"]]["entry"]) == 1:
+                                        entry = trades_dict[new_order["message_id"]].get("entry") or []
+                                        if len(entry) == 1:
                                             ord_ids.append(trades_dict[new_order["message_id"]]["entry_info"]["ordId"])
-                                        elif len(trades_dict[new_order["message_id"]]["entry"]) == 2:
+                                        elif len(entry) == 2:
                                             ord_ids.append(trades_dict[new_order["message_id"]]["entry_info"][0]["ordId"])
                                             ord_ids.append(trades_dict[new_order["message_id"]]["entry_info"][1]["ordId"])
                                         await okx_trade.cancel_orders(trades_dict=trades_dict, instrument_id=okx_coin, ord_ids=ord_ids)
@@ -166,7 +168,8 @@ async def okx_strategy_pool(ai_response_queue: Queue, user_choice_queue: Queue, 
                                         logger.info(" ⛏️ OKX close_entire")
                                         available_info = trades_dict[new_order["message_id"]]["instrument_info"]
                                         ord_ids = [trades_dict[new_order["message_id"]]["sl_info"]["ordId"] if trades_dict[new_order["message_id"]].get("sl_info", None) else None]
-                                        if len(trades_dict[new_order["message_id"]]["entry"]) == 2:
+                                        entry = trades_dict[new_order["message_id"]].get("entry") or []
+                                        if len(entry) == 2:
                                             ord_ids.append(trades_dict[new_order["message_id"]]["entry_info"][1]["ordId"])
                                         if trades_dict[new_order["message_id"]].get("tp_info", None) is not None:
                                             if len(trades_dict[new_order["message_id"]]["tp_info"]) == 1:
