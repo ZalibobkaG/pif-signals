@@ -10,11 +10,22 @@
 import asyncio
 import os
 import sys
-
 from dotenv import load_dotenv
 load_dotenv()
-
 from loguru import logger
+from config import BALANCE, BACKUP_INTERVAL_SECONDS, BACKUP_MAX_FILES
+from utils.tg_channel_monitor import TgChannelMonitor
+from utils.work_with_ai import WorkWithAI
+from exchanges.okx.okx_strategy import okx_strategy_pool
+from exchanges.okx.trade import OkxTrade
+from exchanges.okx.ws_connects import WebSocketClient
+from exchanges.bybit.bybit_strategy import bybit_strategy_pool
+from exchanges.bybit.ws_connects import WebSocketClient as BybitWebSocketClient
+from exchanges.bybit.trade import BybitTrade
+from tg_bot import bot as tg_bot
+from tg_bot import context as tg_context
+from utils.trades_backup import backup_trades_dict_loop
+
 
 # Логирование в консоль и в файл (loguru)
 _base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -26,17 +37,6 @@ logger.remove()
 logger.add(sys.stdout, format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}:{function}:{line}</cyan> | <level>{message}</level>")
 logger.add(_log_file, encoding="utf-8", format=_log_fmt)
 
-from config import BALANCE
-from utils.tg_channel_monitor import TgChannelMonitor
-from utils.work_with_ai import WorkWithAI
-from exchanges.okx.okx_strategy import okx_strategy_pool
-from exchanges.okx.trade import OkxTrade
-from exchanges.okx.ws_connects import WebSocketClient
-from exchanges.bybit.bybit_strategy import bybit_strategy_pool
-from exchanges.bybit.ws_connects import WebSocketClient as BybitWebSocketClient
-from exchanges.bybit.trade import BybitTrade
-from tg_bot import bot as tg_bot
-from tg_bot import context as tg_context
 
 trades_dict = {}
 tg_context.trades_dict = trades_dict
@@ -93,6 +93,7 @@ async def main():
         asyncio.create_task(_run_bot()),
         asyncio.create_task(monitor.run()),
         asyncio.create_task(ai.listen()),
+        asyncio.create_task(backup_trades_dict_loop(trades_dict, _logs_dir, BACKUP_INTERVAL_SECONDS, keep_last=BACKUP_MAX_FILES)),
         asyncio.create_task(okx_strategy_pool(ai_response_queue, user_choice_queue, trades_dict, bybit_queue, okx_trade, bybit_trade, okx_ws_queue)),
         asyncio.create_task(bybit_strategy_pool(bybit_queue, trades_dict, bybit_ws_queue, bybit_trade)),
         asyncio.create_task(okx_ws.connect_private()),

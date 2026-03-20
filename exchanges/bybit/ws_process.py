@@ -31,7 +31,7 @@ def _find_trade_by_order_id(trades_dict: dict, order_id: str, mapped_symbol: str
                     if entry_info[0].get("ordId") == order_id or entry_info[1].get("ordId") == order_id:
                         return msg_id, trade
             else:
-                logger.debug("Bybit ws: trade %s has empty/None entry when matching orderId=%s: %r", msg_id, order_id, trade)
+                logger.debug(f"Bybit ws: trade {msg_id!r} has empty/None entry when matching orderId={order_id!r}: {trade!r}")
 
             tp = trade.get("tp_info")
             if tp is not None:
@@ -47,12 +47,7 @@ def _find_trade_by_order_id(trades_dict: dict, order_id: str, mapped_symbol: str
                 return msg_id, trade
 
         except Exception as e:
-            logger.exception(
-                "Bybit ws: error in _find_trade_by_order_id for msg_id=%s, order_id=%s, trade=%r",
-                msg_id,
-                order_id,
-                trade,
-            )
+            logger.exception(f"Bybit ws: error in _find_trade_by_order_id for msg_id={msg_id!r}, order_id={order_id!r}, trade={trade!r}")
             continue
 
     return None, None
@@ -73,12 +68,12 @@ async def ws_process(data: list, trades_dict: dict, bybit_trade: BybitTrade):
 
         trade_key, trade = _find_trade_by_order_id(trades_dict, order_id, symbol)
         if trade_key is None:
-            logger.debug("Bybit ws: no trade found for symbol=%s order_id=%s item=%r", symbol, order_id, item)
+            logger.debug(f"Bybit ws: no trade found for symbol={symbol!r} order_id={order_id!r} item={item!r}")
             continue
         effective_trade_info = trade
         instrument_info = trade.get("instrument_info")
         if not instrument_info:
-            logger.warning("%s Bybit ws_process: no instrument_info for trade %s", symbol, trade_key)
+            logger.warning(f"{symbol!r} Bybit ws_process: no instrument_info for trade {trade_key!r}")
             continue
 
         if len(trade["entry"]) == 1:

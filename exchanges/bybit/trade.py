@@ -165,7 +165,8 @@ class BybitTrade:
             await self.set_leverage(instrument_id, leverage)
 
             try:
-                order_link_id = f"entry1-{coin}-{side_label}"
+                message_id = trade_info.get("message_id")
+                order_link_id = f"entry1-{coin}-{side_label}-{message_id}"
                 res = await asyncio.to_thread(
                     self.trade_session.place_order,
                     category="linear",
@@ -256,8 +257,9 @@ class BybitTrade:
             logger.info(f"{instrument_id} Bybit Two entries: first={entry_first}, second={entry_second}, qty_first={qty_first}, qty_second={qty_second}, leverage={leverage}x")
             await self.set_leverage(instrument_id, leverage)
 
-            order_link_id_1 = f"entry1-{coin}-{side_label}"
-            order_link_id_2 = f"entry2-{coin}-{side_label}"
+            message_id = trade_info.get("message_id")
+            order_link_id_1 = f"entry1-{coin}-{side_label}-{message_id}"
+            order_link_id_2 = f"entry2-{coin}-{side_label}-{message_id}"
             request = [
                 {"symbol": instrument_id, "side": side, "orderType": "Limit", "qty": str(self.round_tick(qty_first, qty_step)), "price": str(self.round_tick(entry_first, tick_size)), "reduceOnly": False, "orderLinkId": order_link_id_1},
                 {"symbol": instrument_id, "side": side, "orderType": "Limit", "qty": str(self.round_tick(qty_second, qty_step)), "price": str(self.round_tick(entry_second, tick_size)), "reduceOnly": False, "orderLinkId": order_link_id_2},
@@ -309,7 +311,8 @@ class BybitTrade:
 
         if len(tp_levels) == 1:
             try:
-                order_link_id = f"tp1-{coin}-{side_label}"
+                message_id = trade_info.get("message_id")
+                order_link_id = f"tp1-{coin}-{side_label}-{message_id}"
                 res = await asyncio.to_thread(
                     self.trade_session.place_order,
                     category="linear",
@@ -334,8 +337,9 @@ class BybitTrade:
             tp_first_size = self.round_tick(total_size * 0.5, qty_step)
             tp_second_size = self.round_tick(total_size - tp_first_size, qty_step)
 
-            order_link_id_1 = f"tp1-{coin}-{side_label}"
-            order_link_id_2 = f"tp2-{coin}-{side_label}"
+            message_id = trade_info.get("message_id")
+            order_link_id_1 = f"tp1-{coin}-{side_label}-{message_id}"
+            order_link_id_2 = f"tp2-{coin}-{side_label}-{message_id}"
             request = [
                 {"symbol": instrument_id, "side": side_to_close_position, "orderType": "Limit", "qty": str(tp_first_size), "price": str(self.round_tick(tp_levels[0], tick_size)), "reduceOnly": True, "orderLinkId": order_link_id_1},
                 {"symbol": instrument_id, "side": side_to_close_position, "orderType": "Limit", "qty": str(tp_second_size), "price": str(self.round_tick(tp_levels[1], tick_size)), "reduceOnly": True, "orderLinkId": order_link_id_2},
@@ -367,9 +371,10 @@ class BybitTrade:
             tp_second_size = self.round_tick(total_size * 0.4, qty_step)
             tp_third_size = self.round_tick(total_size - tp_first_size - tp_second_size, qty_step)
 
-            order_link_id_1 = f"tp1-{coin}-{side_label}"
-            order_link_id_2 = f"tp2-{coin}-{side_label}"
-            order_link_id_3 = f"tp3-{coin}-{side_label}"
+            message_id = trade_info.get("message_id")
+            order_link_id_1 = f"tp1-{coin}-{side_label}-{message_id}"
+            order_link_id_2 = f"tp2-{coin}-{side_label}-{message_id}"
+            order_link_id_3 = f"tp3-{coin}-{side_label}-{message_id}"
             request = [
                 {"symbol": instrument_id, "side": side_to_close_position, "orderType": "Limit", "qty": str(tp_first_size), "price": str(self.round_tick(tp_levels[0], tick_size)), "reduceOnly": True, "orderLinkId": order_link_id_1},
                 {"symbol": instrument_id, "side": side_to_close_position, "orderType": "Limit", "qty": str(tp_second_size), "price": str(self.round_tick(tp_levels[1], tick_size)), "reduceOnly": True, "orderLinkId": order_link_id_2},
@@ -540,8 +545,9 @@ class BybitTrade:
         logger.info(f"{instrument_id} Bybit enter_now: qty={qty}, nominal={position_nominal_usd:.2f} USD, leverage={leverage}x")
         await self.set_leverage(instrument_id, leverage)
 
+        message_id = trade_info.get("message_id")
+        order_link_id = f"entry{entry_idx}-{coin}-{side_label}-{message_id}"
         try:
-            order_link_id = f"entry{entry_idx}-{coin}-{side_label}"
             res = await asyncio.to_thread(
                 self.trade_session.place_order,
                 category="linear",
@@ -617,8 +623,9 @@ class BybitTrade:
         else:
             limit_price = self.round_tick(sl_price * 1.001, tick_size)
 
+        message_id = trade_info.get("message_id")
+        order_link_id = f"sl-{coin}-{side_label}-{message_id}"
         try:
-            order_link_id = f"sl-{coin}-{side_label}"
             res = await asyncio.to_thread(
                 self.trade_session.place_order,
                 category="linear",
@@ -794,6 +801,16 @@ class BybitTrade:
             return
         positions = res["positions"] if len(res["positions"]) > 0 else None
         orders = res["orders"] if len(res["orders"]) > 0 else None
+        for order in orders:
+            if order.get("orderLinkId") is None:
+                has_pos = False
+                coin = order.get("symbol")
+                for position in positions:
+                    if position.get("symbol") == coin:
+                        has_pos = True
+                        break
+                
+
 
 
 
