@@ -14,3 +14,7 @@ allowed_chat_id: Optional[int] = None
 pending_ai_results: Dict[str, dict] = {}
 # Очередь выборов: (callback_id, "post"|"skip")
 user_choice_queue: Optional[asyncio.Queue] = None
+
+# Ссылка на текущий trades_dict из main.py.
+# Нужна для /setups (показываем монеты на основании trades_dict).
+trades_dict: Optional[dict] = None

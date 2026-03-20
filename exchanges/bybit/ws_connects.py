@@ -31,7 +31,7 @@ class WebSocketClient:
             except Exception as e:
                 if not self.running:
                     break
-                logger.warning(f"❗️ Bybit private WS error: {e}, reconnecting in {self.reconnect_delay}s")
+                # logger.warning(f"❗️ Bybit private WS error: {e}, reconnecting in {self.reconnect_delay}s")
                 await asyncio.sleep(self.reconnect_delay)
 
     async def subscribe_private(self):
@@ -40,7 +40,7 @@ class WebSocketClient:
             "args": ["position", "order"],
         }
         await self.private_ws.send(json.dumps(msg))
-        logger.info("✅ Bybit subscribed to private position & order")
+        # logger.info("✅ Bybit subscribed to private position & order")
 
     async def login(self):
         """
@@ -65,7 +65,7 @@ class WebSocketClient:
             # Успешный ответ auth
             if data.get("op") == "auth":
                 if data.get("success") is True:
-                    logger.info("✅ Bybit private WS auth successful")
+                    # logger.info("✅ Bybit private WS auth successful")
                     break
                 raise Exception(f"❗️ Bybit auth failed: {data}")
 

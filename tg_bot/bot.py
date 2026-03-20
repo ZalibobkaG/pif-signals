@@ -22,7 +22,7 @@ from aiogram.enums import ParseMode
 load_dotenv()
 
 from tg_bot import context as tg_context
-from tg_bot.handlers import commands_router, ai_confirm_router
+from tg_bot.handlers import commands_router, ai_confirm_router, setups_router
 from tg_bot.middlewares import AllowedUserMiddleware
 
 TOKEN = os.environ.get("TG_BOT_TOKEN", "")
@@ -63,6 +63,7 @@ async def main(shutdown_callback=None) -> None:
     dp.message.middleware(StopEventMiddleware(stop_event=stop_event, shutdown_callback=shutdown_callback))
     dp.include_router(commands_router)
     dp.include_router(ai_confirm_router)
+    dp.include_router(setups_router)
 
     if shutdown_callback is not None:
         await dp.start_polling(bot)

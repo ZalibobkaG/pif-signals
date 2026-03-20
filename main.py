@@ -39,6 +39,7 @@ from tg_bot import bot as tg_bot
 from tg_bot import context as tg_context
 
 trades_dict = {}
+tg_context.trades_dict = trades_dict
 
 
 async def full_shutdown(okx_ws, bybit_ws):
