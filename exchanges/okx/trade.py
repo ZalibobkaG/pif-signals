@@ -32,6 +32,32 @@ class OkxTrade:
             decimals = len(str(tick_size).split('.')[-1].rstrip('0'))
         return round(value, decimals)
 
+    def _okx_coin_short(self, coin: str) -> str:
+        """
+        OKX tag короткий и только alphanumerics.
+        Приводим coin к виду без суффикса USDT и с фильтрацией не-alnum.
+        Пример: XRPUSDT -> XRP
+        """
+        c = (coin or "").strip().upper()
+        if c.endswith("USDT"):
+            c = c[: -len("USDT")]
+        c = "".join(ch for ch in c if ch.isalnum())
+        return c
+
+    def _okx_make_tag(self, prefix: str, coin: str, side_label: str) -> str:
+        """
+        OKX tag:
+        - до 16 символов
+        - case-sensitive alphanumerics (без '-', '_' и т.п.)
+        """
+        coin_short = self._okx_coin_short(coin) or "COIN"
+        s = (side_label or "").strip().lower()
+        # side_label ожидается long/short; оставим только буквенно-цифровые.
+        s = "".join(ch for ch in s if ch.isalnum())
+        raw = f"{prefix}{coin_short}{s}"
+        raw = "".join(ch for ch in raw if ch.isalnum())
+        return raw[:16]
+
     async def get_instrument_info(self, instrument_id: str, inst_type: str = "SWAP") -> tuple:
         res = await asyncio.to_thread(self.publicData.get_instruments, instType=inst_type, instId=instrument_id)
         if "data" not in res or not res["data"]:
@@ -56,6 +82,8 @@ class OkxTrade:
     async def place_new_order(self, trades_dict: dict, instrument_id: str, trade_info: dict, instrument_info: tuple) -> bool:
         lot_size, ct_val, min_size, tick_size, max_leverage = instrument_info
         side = "buy" if trade_info["side"] == "long" else "sell"
+        coin = trade_info.get("coin") or instrument_id
+        side_label = trade_info.get("side")  # long/short
 
         if trade_info["entry"] == None:
             logger.info(f"{instrument_id} OKX entry is None - Using current price")
@@ -106,6 +134,7 @@ class OkxTrade:
 
             # Выставляем ордер
             try:
+                tag = self._okx_make_tag("entry1-", coin, side_label)
                 res = self.trade.set_order(
                     instId=instrument_id,
                     side=side,
@@ -113,6 +142,7 @@ class OkxTrade:
                     tdMode="isolated",
                     sz=str(self.round_tick(position_size, lot_size)),
                     px=str(self.round_tick(entry, tick_size)),
+                    tag=tag,
                 )
 
                 # Сохраняем информацию о размещённом ордере в trades_dict
@@ -174,9 +204,11 @@ class OkxTrade:
             logger.info(f"{instrument_id} Two entries: first={entry_first}, second={entry_second}, size_first={size_first}, size_second={size_second}, leverage={leverage}x")
             await self.set_leverage(instrument_id, leverage)
 
+            tag1 = self._okx_make_tag("entry1-", coin, side_label)
+            tag2 = self._okx_make_tag("entry2-", coin, side_label)
             batch_orders = [
-                {"instId": instrument_id, "tdMode": "isolated", "side": side, "ordType": "limit", "sz": str(self.round_tick(size_first, lot_size)), "px": str(self.round_tick(entry_first, tick_size))},
-                {"instId": instrument_id, "tdMode": "isolated", "side": side, "ordType": "limit", "sz": str(self.round_tick(size_second, lot_size)), "px": str(self.round_tick(entry_second, tick_size))},
+                {"instId": instrument_id, "tdMode": "isolated", "side": side, "ordType": "limit", "sz": str(self.round_tick(size_first, lot_size)), "px": str(self.round_tick(entry_first, tick_size)), "tag": tag1},
+                {"instId": instrument_id, "tdMode": "isolated", "side": side, "ordType": "limit", "sz": str(self.round_tick(size_second, lot_size)), "px": str(self.round_tick(entry_second, tick_size)), "tag": tag2},
             ]
             ord_ids = []
             try:
@@ -210,6 +242,8 @@ class OkxTrade:
         side_to_close_position = "sell" if trade_info["side"] == "long" else "buy"
         trade = trades_dict[trade_info["message_id"]]
         total_size = float(trade["current_fill_size"])
+        coin = trade_info.get("coin") or trade.get("coin") or instrument_id
+        side_label = trade_info.get("side")
         # Фильтруем None из tp, чтобы не пытаться выставлять тейки по None
         tp_levels = [tp for tp in (trade.get("tp") or []) if tp is not None]
         if not tp_levels:
@@ -218,6 +252,7 @@ class OkxTrade:
 
         if len(tp_levels) == 1:
             try:
+                tag = self._okx_make_tag("tp1-", coin, side_label)
                 res = self.trade.set_order(
                     instId=instrument_id,
                     side=side_to_close_position,
@@ -225,6 +260,7 @@ class OkxTrade:
                     tdMode="isolated",
                     sz=str(total_size),
                     px=str(tp_levels[0]),
+                    tag=tag,
                 )
                 if res.get("code") == "0" and res.get("data"):
                     tp_id = res["data"][0].get("ordId")
@@ -237,10 +273,13 @@ class OkxTrade:
         elif len(tp_levels) == 2:
             tp_first_size = self.round_tick(total_size * 0.5, lot_size)
             tp_second_size = self.round_tick(total_size - tp_first_size, lot_size)
+
+            tag1 = self._okx_make_tag("tp1-", coin, side_label)
+            tag2 = self._okx_make_tag("tp2-", coin, side_label)
             
             batch_orders = [
-                {"instId": instrument_id, "tdMode": "isolated", "side": side_to_close_position, "ordType": "limit", "sz": str(tp_first_size), "px": str(self.round_tick(tp_levels[0], tick_size))},
-                {"instId": instrument_id, "tdMode": "isolated", "side": side_to_close_position, "ordType": "limit", "sz": str(self.round_tick(tp_second_size, lot_size)), "px": str(self.round_tick(tp_levels[1], tick_size))},
+                {"instId": instrument_id, "tdMode": "isolated", "side": side_to_close_position, "ordType": "limit", "sz": str(tp_first_size), "px": str(self.round_tick(tp_levels[0], tick_size)), "tag": tag1},
+                {"instId": instrument_id, "tdMode": "isolated", "side": side_to_close_position, "ordType": "limit", "sz": str(self.round_tick(tp_second_size, lot_size)), "px": str(self.round_tick(tp_levels[1], tick_size)), "tag": tag2},
             ]
             ord_ids = []
             try:
@@ -263,11 +302,15 @@ class OkxTrade:
             tp_first_size = self.round_tick(total_size * 0.5, lot_size)
             tp_second_size = self.round_tick(total_size * 0.4, lot_size)
             tp_third_size = self.round_tick(total_size - tp_first_size - tp_second_size, lot_size)
+
+            tag1 = self._okx_make_tag("tp1-", coin, side_label)
+            tag2 = self._okx_make_tag("tp2-", coin, side_label)
+            tag3 = self._okx_make_tag("tp3-", coin, side_label)
             
             batch_orders = [
-                {"instId": instrument_id, "tdMode": "isolated", "side": side_to_close_position, "ordType": "limit", "sz": str(tp_first_size), "px": str(self.round_tick(tp_levels[0], tick_size))},
-                {"instId": instrument_id, "tdMode": "isolated", "side": side_to_close_position, "ordType": "limit", "sz": str(tp_second_size), "px": str(self.round_tick(tp_levels[1], tick_size))},
-                {"instId": instrument_id, "tdMode": "isolated", "side": side_to_close_position, "ordType": "limit", "sz": str(self.round_tick(tp_third_size, lot_size)), "px": str(self.round_tick(tp_levels[2], tick_size))},
+                {"instId": instrument_id, "tdMode": "isolated", "side": side_to_close_position, "ordType": "limit", "sz": str(tp_first_size), "px": str(self.round_tick(tp_levels[0], tick_size)), "tag": tag1},
+                {"instId": instrument_id, "tdMode": "isolated", "side": side_to_close_position, "ordType": "limit", "sz": str(tp_second_size), "px": str(self.round_tick(tp_levels[1], tick_size)), "tag": tag2},
+                {"instId": instrument_id, "tdMode": "isolated", "side": side_to_close_position, "ordType": "limit", "sz": str(self.round_tick(tp_third_size, lot_size)), "px": str(self.round_tick(tp_levels[2], tick_size)), "tag": tag3},
             ]
             ord_ids = []
             try:
@@ -417,7 +460,10 @@ class OkxTrade:
         side_to_close_position = "sell" if trade_info["side"] == "long" else "buy"
         trade = trades_dict[trade_info["message_id"]]
         current_fill_size = float(trade["current_fill_size"])
+        coin = trade_info.get("coin") or trade.get("coin") or instrument_id
+        side_label = trade_info.get("side")
         try:
+            tag = self._okx_make_tag("sl-", coin, side_label)
             order = {
                 "instId": instrument_id,
                 "side": side_to_close_position,
@@ -428,6 +474,7 @@ class OkxTrade:
                 "reduceOnly": True,
                 "slTriggerPx": str(self.round_tick(trade["sl"] * 1.002, tick_size) if side_to_close_position == "sell" else self.round_tick(trade["sl"] * 0.998, tick_size)),
                 "slOrdPx": str(self.round_tick(trade["sl"], tick_size)),
+                "tag": tag,
             }
             res = self.algotrade.set_order_algo(**order)
             if res.get("code") == "0" and res.get("data"):
@@ -477,6 +524,10 @@ class OkxTrade:
         lot_size, ct_val, min_size, tick_size, max_leverage = instrument_info
         trade = trades_dict[trade_info["message_id"]]
         okx_side = "buy" if trade["side"] == "long" else "sell"
+        coin = trade_info.get("coin") or trade.get("coin") or instrument_id
+        side_label = trade.get("side")
+        entry_idx = 2 if isinstance(trade.get("entry"), list) and len(trade.get("entry") or []) == 2 else 1
+        tag = self._okx_make_tag(f"entry{entry_idx}-", coin, side_label)
         curr_price = await self.get_curr_price(instrument_id)
         print(f"curr_price: {curr_price}")
         if curr_price != 0:
@@ -529,6 +580,7 @@ class OkxTrade:
                 ordType="market",
                 tdMode="isolated",
                 sz=str(self.round_tick(position_size, lot_size)),
+                tag=tag,
             )
 
             # Сохраняем информацию о размещённом ордере в trades_dict

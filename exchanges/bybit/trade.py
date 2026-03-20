@@ -117,6 +117,8 @@ class BybitTrade:
         """
         max_leverage, tick_size, min_order_qty, qty_step, min_notional_value = instrument_info
         side = "Buy" if trade_info["side"] == "long" else "Sell"
+        coin = (trade_info.get("coin") or instrument_id)[:-4]
+        side_label = trade_info.get("side") or ""
 
         if trade_info["entry"] == None:
             logger.info(f"{instrument_id} Bybit entry is None - Using current price")
@@ -163,6 +165,7 @@ class BybitTrade:
             await self.set_leverage(instrument_id, leverage)
 
             try:
+                order_link_id = f"entry1-{coin}-{side_label}"
                 res = await asyncio.to_thread(
                     self.trade_session.place_order,
                     category="linear",
@@ -172,6 +175,7 @@ class BybitTrade:
                     qty=str(self.round_tick(qty, qty_step)),
                     price=str(self.round_tick(entry, tick_size)),
                     reduceOnly=False,
+                    orderLinkId=order_link_id,
                 )
 
                 if res.get("retCode") == 0 and res.get("result"):
@@ -252,9 +256,11 @@ class BybitTrade:
             logger.info(f"{instrument_id} Bybit Two entries: first={entry_first}, second={entry_second}, qty_first={qty_first}, qty_second={qty_second}, leverage={leverage}x")
             await self.set_leverage(instrument_id, leverage)
 
+            order_link_id_1 = f"entry1-{coin}-{side_label}"
+            order_link_id_2 = f"entry2-{coin}-{side_label}"
             request = [
-                {"symbol": instrument_id, "side": side, "orderType": "Limit", "qty": str(self.round_tick(qty_first, qty_step)), "price": str(self.round_tick(entry_first, tick_size)), "reduceOnly": False},
-                {"symbol": instrument_id, "side": side, "orderType": "Limit", "qty": str(self.round_tick(qty_second, qty_step)), "price": str(self.round_tick(entry_second, tick_size)), "reduceOnly": False},
+                {"symbol": instrument_id, "side": side, "orderType": "Limit", "qty": str(self.round_tick(qty_first, qty_step)), "price": str(self.round_tick(entry_first, tick_size)), "reduceOnly": False, "orderLinkId": order_link_id_1},
+                {"symbol": instrument_id, "side": side, "orderType": "Limit", "qty": str(self.round_tick(qty_second, qty_step)), "price": str(self.round_tick(entry_second, tick_size)), "reduceOnly": False, "orderLinkId": order_link_id_2},
             ]
             ord_ids = []
             try:
@@ -293,6 +299,8 @@ class BybitTrade:
         side_to_close_position = "Sell" if trade_info["side"] == "long" else "Buy"
         trade = trades_dict[trade_info["message_id"]]
         total_size = float(trade["current_fill_size"])
+        coin = (trade_info.get("coin") or instrument_id)[:-4]
+        side_label = trade_info.get("side") or ""
         # Фильтруем None из tp, чтобы не падать на round_tick(None)
         tp_levels = [tp for tp in (trade.get("tp") or []) if tp is not None]
         if not tp_levels:
@@ -301,6 +309,7 @@ class BybitTrade:
 
         if len(tp_levels) == 1:
             try:
+                order_link_id = f"tp1-{coin}-{side_label}"
                 res = await asyncio.to_thread(
                     self.trade_session.place_order,
                     category="linear",
@@ -310,6 +319,7 @@ class BybitTrade:
                     qty=str(self.round_tick(total_size, qty_step)),
                     price=str(self.round_tick(tp_levels[0], tick_size)),
                     reduceOnly=True,
+                    orderLinkId=order_link_id,
                 )
                 if res.get("retCode") == 0 and res.get("result"):
                     tp_id = res["result"].get("orderId")
@@ -324,9 +334,11 @@ class BybitTrade:
             tp_first_size = self.round_tick(total_size * 0.5, qty_step)
             tp_second_size = self.round_tick(total_size - tp_first_size, qty_step)
 
+            order_link_id_1 = f"tp1-{coin}-{side_label}"
+            order_link_id_2 = f"tp2-{coin}-{side_label}"
             request = [
-                {"symbol": instrument_id, "side": side_to_close_position, "orderType": "Limit", "qty": str(tp_first_size), "price": str(self.round_tick(tp_levels[0], tick_size)), "reduceOnly": True},
-                {"symbol": instrument_id, "side": side_to_close_position, "orderType": "Limit", "qty": str(tp_second_size), "price": str(self.round_tick(tp_levels[1], tick_size)), "reduceOnly": True},
+                {"symbol": instrument_id, "side": side_to_close_position, "orderType": "Limit", "qty": str(tp_first_size), "price": str(self.round_tick(tp_levels[0], tick_size)), "reduceOnly": True, "orderLinkId": order_link_id_1},
+                {"symbol": instrument_id, "side": side_to_close_position, "orderType": "Limit", "qty": str(tp_second_size), "price": str(self.round_tick(tp_levels[1], tick_size)), "reduceOnly": True, "orderLinkId": order_link_id_2},
             ]
             ord_ids = []
             try:
@@ -355,10 +367,13 @@ class BybitTrade:
             tp_second_size = self.round_tick(total_size * 0.4, qty_step)
             tp_third_size = self.round_tick(total_size - tp_first_size - tp_second_size, qty_step)
 
+            order_link_id_1 = f"tp1-{coin}-{side_label}"
+            order_link_id_2 = f"tp2-{coin}-{side_label}"
+            order_link_id_3 = f"tp3-{coin}-{side_label}"
             request = [
-                {"symbol": instrument_id, "side": side_to_close_position, "orderType": "Limit", "qty": str(tp_first_size), "price": str(self.round_tick(tp_levels[0], tick_size)), "reduceOnly": True},
-                {"symbol": instrument_id, "side": side_to_close_position, "orderType": "Limit", "qty": str(tp_second_size), "price": str(self.round_tick(tp_levels[1], tick_size)), "reduceOnly": True},
-                {"symbol": instrument_id, "side": side_to_close_position, "orderType": "Limit", "qty": str(self.round_tick(tp_third_size, qty_step)), "price": str(self.round_tick(tp_levels[2], tick_size)), "reduceOnly": True},
+                {"symbol": instrument_id, "side": side_to_close_position, "orderType": "Limit", "qty": str(tp_first_size), "price": str(self.round_tick(tp_levels[0], tick_size)), "reduceOnly": True, "orderLinkId": order_link_id_1},
+                {"symbol": instrument_id, "side": side_to_close_position, "orderType": "Limit", "qty": str(tp_second_size), "price": str(self.round_tick(tp_levels[1], tick_size)), "reduceOnly": True, "orderLinkId": order_link_id_2},
+                {"symbol": instrument_id, "side": side_to_close_position, "orderType": "Limit", "qty": str(self.round_tick(tp_third_size, qty_step)), "price": str(self.round_tick(tp_levels[2], tick_size)), "reduceOnly": True, "orderLinkId": order_link_id_3},
             ]
             ord_ids = []
             try:
@@ -479,6 +494,10 @@ class BybitTrade:
         max_leverage, tick_size, min_order_qty, qty_step, min_notional_value = instrument_info
         trade = trades_dict[trade_info["message_id"]]
         side = "Buy" if trade["side"] == "long" else "Sell"
+        coin = (trade_info.get("coin") or trade.get("coin") or instrument_id)[:-4]
+        side_label = trade.get("side") or trade_info.get("side") or ""
+        entry_idx = 2 if isinstance(trade.get("entry"), list) and len(trade.get("entry") or []) == 2 else 1
+
 
         curr_price = await self.get_curr_price(instrument_id)
         if curr_price == 0:
@@ -522,6 +541,7 @@ class BybitTrade:
         await self.set_leverage(instrument_id, leverage)
 
         try:
+            order_link_id = f"entry{entry_idx}-{coin}-{side_label}"
             res = await asyncio.to_thread(
                 self.trade_session.place_order,
                 category="linear",
@@ -530,6 +550,7 @@ class BybitTrade:
                 orderType="Market",
                 qty=str(self.round_tick(qty, qty_step)),
                 reduceOnly=False,
+                orderLinkId=order_link_id,
             )
 
             if res.get("retCode") == 0 and res.get("result"):
@@ -582,6 +603,9 @@ class BybitTrade:
         current_fill_size = float(trade["current_fill_size"])
         sl_price = self.round_tick(float(trade["sl"]), tick_size)
         side = "Sell" if trade_info["side"] == "long" else "Buy"
+        coin = (trade_info.get("coin") or trade.get("coin") or instrument_id)[:-4]
+        side_label = trade_info.get("side") or trade.get("side") or ""
+
         # triggerDirection: 2 = fall to trigger (long→sell), 1 = rise to trigger (short→buy)
         trigger_direction = 2 if trade_info["side"] == "long" else 1
 
@@ -594,6 +618,7 @@ class BybitTrade:
             limit_price = self.round_tick(sl_price * 1.001, tick_size)
 
         try:
+            order_link_id = f"sl-{coin}-{side_label}"
             res = await asyncio.to_thread(
                 self.trade_session.place_order,
                 category="linear",
@@ -606,6 +631,7 @@ class BybitTrade:
                 triggerDirection=trigger_direction,
                 reduceOnly=True,
                 closeOnTrigger=True,
+                orderLinkId=order_link_id,
             )
             if res.get("retCode") == 0 and res.get("result"):
                 ord_id = res["result"].get("orderId")
@@ -734,7 +760,6 @@ class BybitTrade:
                 category="linear",
                 settleCoin="USDT",
             )
-            logger.info(f"Bybit positions_info: {positions_res}")
 
             await asyncio.sleep(0.05)
 
@@ -744,7 +769,7 @@ class BybitTrade:
                 settleCoin="USDT",
                 openOnly=0,  # 0 = только открытые (New, PartiallyFilled)
             )   
-            logger.info(f"Bybit orders_info: {orders_res}")
+
             out = {
                 "positions": positions_res.get("result", {}).get("list", []) if positions_res.get("retCode") == 0 else [],
                 "orders": orders_res.get("result", {}).get("list", []) if orders_res.get("retCode") == 0 else [],
@@ -767,146 +792,12 @@ class BybitTrade:
         res = await self.positions_info()
         if res is False:
             return
-        positions = [p for p in res["positions"] if float(p.get("size", 0) or 0) > 0]
-        orders = res["orders"]
+        positions = res["positions"] if len(res["positions"]) > 0 else None
+        orders = res["orders"] if len(res["orders"]) > 0 else None
 
-        def _our_order_ids():
-            out = set()
-            for t in trades_dict.values():
-                if t.get("exchange") != "BYBIT":
-                    continue
-                ei = t.get("entry_info")
-                if isinstance(ei, dict) and ei.get("ordId"):
-                    out.add(ei["ordId"])
-                elif isinstance(ei, list):
-                    for x in ei:
-                        if isinstance(x, dict) and x.get("ordId"):
-                            out.add(x["ordId"])
-                si = t.get("sl_info")
-                if isinstance(si, dict) and si.get("ordId"):
-                    out.add(si["ordId"])
-                ti = t.get("tp_info")
-                if isinstance(ti, dict) and ti.get("ordId"):
-                    out.add(ti["ordId"])
-                elif isinstance(ti, (list, tuple)):
-                    for x in ti:
-                        if isinstance(x, dict) and x.get("ordId"):
-                            out.add(x["ordId"])
-            return out
 
-        our_ids = _our_order_ids()
-        our_bybit_symbols = {
-            t.get("coin") for t in trades_dict.values()
-            if t.get("exchange") == "BYBIT"
-        }
 
-        external_orders = [o for o in orders if o.get("orderId") not in our_ids]
-        by_symbol = {}
-        for o in external_orders:
-            s = o.get("symbol", "")
-            if s:
-                by_symbol.setdefault(s, []).append(o)
-
-        for pos in positions:
-            symbol = pos.get("symbol", "")
-            if not symbol or symbol in our_bybit_symbols:
-                continue
-            msg_id = get_latest_root_for_coin(symbol)
-            if msg_id is None:
-                logger.debug(f"Bybit sync: skip position {symbol} — нет в истории ответов AI по этой монете")
-                continue
-            if msg_id in trades_dict:
-                continue
-            side = "long" if pos.get("side") == "Buy" else "short"
-            avg_price = float(pos.get("avgPrice", 0) or 0)
-            size = float(pos.get("size", 0) or 0)
-            symbol_orders = by_symbol.get(symbol, [])
-            sl_order = None
-            tp_orders = []
-            for o in symbol_orders:
-                if o.get("stopOrderType") == "Stop" and o.get("closeOnTrigger") is True:
-                    sl_order = o
-                elif o.get("reduceOnly") is True and (o.get("stopOrderType") or "") != "Stop":
-                    tp_orders.append(o)
-            # Уровни SL/TP: в веб-интерфейсе Bybit юзер почти всегда подвязывает SL к позиции — они приходят в позиции и в ордерах
-            pos_sl = pos.get("stopLoss") or ""
-            pos_tp = pos.get("takeProfit") or ""
-            sl_price = 0.0
-            if pos_sl and float(pos_sl) > 0:
-                sl_price = float(pos_sl)
-            if not sl_price and sl_order:
-                sl_price = float(sl_order.get("triggerPrice", 0) or sl_order.get("price", 0) or 0)
-            tp_prices = [float(o.get("price", 0) or 0) for o in tp_orders if o.get("price")]
-            if not tp_prices and pos_tp and float(pos_tp) > 0:
-                tp_prices = [float(pos_tp)]
-
-            inst_info = await self.get_instrument_info(symbol)
-            if inst_info[0] is None:
-                continue
-            trade = {
-                "message_id": msg_id,
-                "coin": symbol,
-                "exchange": "BYBIT",
-                "side": side,
-                "entry": [avg_price],
-                "sl": sl_price if sl_price else None,
-                "tp": tp_prices if tp_prices else [],
-                "risk": "1%",
-                "status": "filled",
-                "instrument_info": inst_info,
-                "entry_info": {"ordId": None, "price_filled": avg_price, "size": size, "size_filled": size, "status": "filled"},
-                "current_fill_size": size,
-            }
-            if sl_order:
-                trade["sl_info"] = {"ordId": sl_order.get("orderId"), "price_filled": None, "size": size, "size_filled": None, "status": sl_order.get("orderStatus", "active")}
-            else:
-                trade["sl_info"] = None
-            if len(tp_orders) == 1:
-                trade["tp_info"] = {"ordId": tp_orders[0].get("orderId"), "price_filled": None, "size": size, "size_filled": None, "status": tp_orders[0].get("orderStatus", "active")}
-            elif len(tp_orders) > 1:
-                trade["tp_info"] = [{"ordId": o.get("orderId"), "price_filled": None, "size": float(o.get("qty", 0) or 0), "size_filled": None, "status": o.get("orderStatus", "active")} for o in tp_orders]
-            else:
-                trade["tp_info"] = None
-            trades_dict[msg_id] = trade
-            our_bybit_symbols.add(symbol)
-            logger.info(f"Bybit sync: added position {symbol} -> message_id={msg_id}")
-
-        for o in external_orders:
-            if o.get("reduceOnly") is True:
-                continue
-            symbol = o.get("symbol", "")
-            if not symbol or symbol in our_bybit_symbols:
-                continue
-            msg_id = get_latest_root_for_coin(symbol)
-            if msg_id is None:
-                logger.debug(f"Bybit sync: skip entry order {symbol} — нет в истории ответов AI по этой монете")
-                continue
-            if msg_id in trades_dict:
-                continue
-            side = "long" if o.get("side") == "Buy" else "short"
-            price = float(o.get("price", 0) or 0)
-            qty = float(o.get("qty", 0) or o.get("leavesQty", 0) or 0)
-            inst_info = await self.get_instrument_info(symbol)
-            if inst_info[0] is None:
-                continue
-            trades_dict[msg_id] = {
-                "message_id": msg_id,
-                "coin": symbol,
-                "exchange": "BYBIT",
-                "side": side,
-                "entry": [price],
-                "sl": None,
-                "tp": [],
-                "risk": "1%",
-                "status": "active",
-                "instrument_info": inst_info,
-                "entry_info": {"ordId": o.get("orderId"), "price_filled": None, "size": qty, "size_filled": None, "status": o.get("orderStatus", "active")},
-                "sl_info": None,
-                "tp_info": None,
-            }
-            our_bybit_symbols.add(symbol)
-            logger.info(f"Bybit sync: added entry order {symbol} -> message_id={msg_id}")
-
+        
 
 if __name__ == "__main__":
     from dotenv import load_dotenv
@@ -919,8 +810,9 @@ if __name__ == "__main__":
             balance=float(os.getenv("TRADING_BALANCE", "10")),
         )
         trades_dict = {}
-        res = await bybit_trade.sync_external_setups(trades_dict=trades_dict)
-        pprint(trades_dict, indent=2, width=80, sort_dicts=False)
+        res = await bybit_trade.positions_info()
+        logger.info(f"Bybit positions_info: {res}")
+
     asyncio.run(_run_tests())
 
 
