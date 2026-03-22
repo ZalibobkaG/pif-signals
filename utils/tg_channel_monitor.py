@@ -151,11 +151,13 @@ class TgChannelMonitor:
         
         # Обычная обработка (одна ссылка или нет ссылок) - проверяем processed_ids
         if not is_edit and msg.id in self.processed_ids:
-            logger.info("skip by processed_ids (new): msg.id=%s", msg.id)
+            logger.info(f"skip by processed_ids (new): msg.id={msg.id}")
             return
         if is_edit and msg.id not in self.processed_ids:
-            logger.info("skip by processed_ids (edit without base): msg.id=%s", msg.id)
-            return
+            # Бывает без «реального» редактирования: только MessageEdited без NewMessage
+            # (превью ссылок, порядок доставки, рестарт бота до прихода NewMessage и т.д.)
+            logger.info(f"edit без записи в processed_ids — обрабатываем как первое появление: msg.id={msg.id}")
+            is_edit = False
 
         # Обычная обработка (одна ссылка или нет ссылок)
         root_id = await self._find_root_message_id(msg)

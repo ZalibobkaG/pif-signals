@@ -4,7 +4,7 @@
 BALANCE = float(200)
 
 # Период сохранения бекапа trades_dict (сек).
-BACKUP_INTERVAL_SECONDS = 100
+BACKUP_INTERVAL_SECONDS = 1000
 
 # Максимальное количество backup-файлов в logs/backups.
 BACKUP_MAX_FILES = 100
