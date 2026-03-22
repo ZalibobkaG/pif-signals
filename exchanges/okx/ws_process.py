@@ -62,7 +62,7 @@ async def ws_process(data: dict, trades_dict: dict, okx_trade: OkxTrade, trade_i
                     trade["current_fill_size"] = float(item.get("accFillSz"))
                     trade["entry_info"]["price_filled"] = item.get("fillPx")
                     trade["entry_info"]["size_filled"] = item.get("accFillSz")
-                    trade["entry_info"]["status"] = {state}
+                    trade["entry_info"]["status"] = state
                     trade["status"] = "filled"
 
                 if state == "filled":
@@ -70,7 +70,7 @@ async def ws_process(data: dict, trades_dict: dict, okx_trade: OkxTrade, trade_i
                     trade["current_fill_size"] = float(item.get("accFillSz"))
                     trade["entry_info"]["price_filled"] = item.get("fillPx")
                     trade["entry_info"]["size_filled"] = item.get("accFillSz")
-                    trade["entry_info"]["status"] = {state}
+                    trade["entry_info"]["status"] = state
                     trade["status"] = "filled"
 
                     # Уведомление в ТГ о том, что вход исполнен 
@@ -123,7 +123,7 @@ async def ws_process(data: dict, trades_dict: dict, okx_trade: OkxTrade, trade_i
                     trade["current_fill_size"] = float(item.get("accFillSz"))
                     trade["entry_info"][0]["price_filled"] = item.get("fillPx")
                     trade["entry_info"][0]["size_filled"] = item.get("accFillSz")
-                    trade["entry_info"][0]["status"] = {state}
+                    trade["entry_info"][0]["status"] = state
                     trade["status"] = "filled"
 
                 if state == "filled":
@@ -131,7 +131,7 @@ async def ws_process(data: dict, trades_dict: dict, okx_trade: OkxTrade, trade_i
                     trade["current_fill_size"] = float(item.get("accFillSz"))
                     trade["entry_info"][0]["price_filled"] = item.get("fillPx")
                     trade["entry_info"][0]["size_filled"] = item.get("accFillSz")
-                    trade["entry_info"][0]["status"] = {state}
+                    trade["entry_info"][0]["status"] = state
                     trade["status"] = "filled"
 
                     await send_message(f"✅ ENTRY1 {instId} — filled")
@@ -182,7 +182,7 @@ async def ws_process(data: dict, trades_dict: dict, okx_trade: OkxTrade, trade_i
                     trade["current_fill_size"] = float(item.get("accFillSz"))
                     trade["entry_info"][1]["price_filled"] = item.get("fillPx")
                     trade["entry_info"][1]["size_filled"] = item.get("accFillSz")
-                    trade["entry_info"][1]["status"] = {state}
+                    trade["entry_info"][1]["status"] = state
                     trade["status"] = "filled"
 
                 if state == "filled":
@@ -190,7 +190,7 @@ async def ws_process(data: dict, trades_dict: dict, okx_trade: OkxTrade, trade_i
                     trade["current_fill_size"] = float(item.get("accFillSz"))
                     trade["entry_info"][1]["price_filled"] = item.get("fillPx")
                     trade["entry_info"][1]["size_filled"] = item.get("accFillSz")
-                    trade["entry_info"][1]["status"] = {state}
+                    trade["entry_info"][1]["status"] = state
                     trade["status"] = "filled"
 
                     await send_message(f"✅ ENTRY2 {instId} — filled")

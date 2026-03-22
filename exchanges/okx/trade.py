@@ -58,6 +58,19 @@ class OkxTrade:
         raw = "".join(ch for ch in raw if ch.isalnum())
         return raw[:16]
 
+    def _okx_post_algo_order(self, body: dict) -> dict:
+        """
+        Ставим algo order прямым REST POST, без зависимости от сигнатуры SDK-метода.
+        В разных версиях python-okx параметры set_order_algo отличаются.
+        """
+        return self.algotrade.send_request(
+            "/api/v5/trade/order-algo",
+            "POST",
+            body,
+            proxies={},
+            proxy_host=None,
+        )
+
     async def get_instrument_info(self, instrument_id: str, inst_type: str = "SWAP") -> tuple:
         res = await asyncio.to_thread(self.publicData.get_instruments, instType=inst_type, instId=instrument_id)
         if "data" not in res or not res["data"]:
@@ -411,7 +424,7 @@ class OkxTrade:
                 logger.info(f"✅ {instrument_id} Cancelled orders {ord_ids}")
                 return True
             else:
-                logger.error(f"{instrument_id} Error cancelling orders {ord_ids}: {res.get('msg')}")
+                logger.error(f"{instrument_id} Error cancelling orders {ord_ids}: {res.get('msg')} full={res}")
                 return False
         except Exception as e:
             logger.error(f"{instrument_id} Error cancelling orders {ord_ids}: {e}")
@@ -464,7 +477,7 @@ class OkxTrade:
         side_label = trade_info.get("side")
         try:
             tag = self._okx_make_tag("sl-", coin, side_label)
-            order = {
+            order_body = {
                 "instId": instrument_id,
                 "side": side_to_close_position,
                 "ordType": "conditional",
@@ -476,7 +489,7 @@ class OkxTrade:
                 "slOrdPx": str(self.round_tick(trade["sl"], tick_size)),
                 "tag": tag,
             }
-            res = self.algotrade.set_order_algo(**order)
+            res = self._okx_post_algo_order(order_body)
             if res.get("code") == "0" and res.get("data"):
                 trade["sl_info"] = {"ordId": res["data"][0].get("algoId"), "price_filled": None, "size": current_fill_size, "size_filled": None, "status": "active"}
                 logger.info(f"✅ {instrument_id} stop loss order placed")
@@ -492,6 +505,12 @@ class OkxTrade:
         lot_size, ct_val, min_size, tick_size, max_leverage = instrument_info
         side_to_close_position = "sell" if trade_info["side"] == "long" else "buy"
         trade = trades_dict[trade_info["message_id"]]
+        # close_entire из AI часто приходит с side=None — брать сторону из сохранённого трейда
+        pos_side = trade.get("side") or trade_info.get("side")
+        if pos_side not in ("long", "short"):
+            logger.error(f"(trade.side={trade.get('side')!r}, trade_info.side={trade_info.get('side')!r})")
+            return False
+        side_to_close_position = "sell" if pos_side == "long" else "buy"
         current_fill_size = float(trade["current_fill_size"])
         try:
             res = self.trade.set_order(
@@ -509,6 +528,7 @@ class OkxTrade:
                 logger.info(f"✅ {instrument_id} closed entire position {ord_id} at {filled_price}")
                 pprint(trade, indent=2, width=80, sort_dicts=False)
                 return True
+            logger.error(f"{instrument_id} close_entire_position API error: {res}")
         except Exception as e:
             logger.error(f"{instrument_id} Error closing entire position: {e}")
             return False
