@@ -1,8 +1,9 @@
 import asyncio
 import gzip
-import json
 import os
+import copy
 from datetime import datetime, timezone
+from pprint import pformat
 
 from loguru import logger
 
@@ -10,12 +11,12 @@ from loguru import logger
 def _write_trades_backup_sync(backups_dir: str, snapshot: dict) -> str:
     """
     Синхронная запись снапшота trades_dict в .txt.gz.
-    Формат файла — JSON-текст (txt), упакованный gzip.
+    Формат файла — текстовый дамп словаря, упакованный gzip.
     """
     ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
     filename = f"trades_dict_{ts}.txt.gz"
     path = os.path.join(backups_dir, filename)
-    payload = json.dumps(snapshot, ensure_ascii=False, indent=2, sort_keys=True)
+    payload = pformat(snapshot, width=140, sort_dicts=False)
     with gzip.open(path, "wt", encoding="utf-8") as f:
         f.write(payload)
     return path
@@ -59,7 +60,8 @@ async def backup_trades_dict_loop(trades: dict, logs_dir: str, interval_sec: int
     logger.info(f"Backup loop started: every {interval_sec}s -> {backups_dir}")
     while True:
         try:
-            snapshot = json.loads(json.dumps(trades, ensure_ascii=False))
+            # Сделаем копию, чтобы во время форматирования trades_dict не менялся.
+            snapshot = copy.deepcopy(trades)
             backup_path = await asyncio.to_thread(_write_trades_backup_sync, backups_dir, snapshot)
             removed = await asyncio.to_thread(_prune_old_backups_sync, backups_dir, keep_last)
             logger.debug(f"trades_dict backup saved: {backup_path}")
