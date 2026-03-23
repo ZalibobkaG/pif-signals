@@ -501,7 +501,9 @@ class BybitTrade:
         side = "Buy" if trade["side"] == "long" else "Sell"
         coin = (trade_info.get("coin") or trade.get("coin") or instrument_id)[:-4]
         side_label = trade.get("side") or trade_info.get("side") or ""
-        entry_idx = 2 if isinstance(trade.get("entry"), list) and len(trade.get("entry") or []) == 2 else 1
+        entry_list = trade.get("entry") if isinstance(trade.get("entry"), list) else []
+        entry_list = [x for x in entry_list if x is not None]
+        entry_idx = 2 if len(entry_list) == 2 else 1
 
 
         curr_price = await self.get_curr_price(instrument_id)
@@ -566,7 +568,7 @@ class BybitTrade:
                     trades_dict[message_id] = {}
                 trades_dict[message_id].update(trade.copy())
                 trades_dict[message_id]["status"] = "active"
-                if len(trade["entry"]) == 2:
+                if len(entry_list) == 2 and isinstance(trades_dict[message_id].get("entry"), list):
                     trades_dict[message_id]["entry"].pop(-1)
                 trades_dict[message_id]["entry_info"] = {"ordId": ord_id, "price_filled": None, "size": qty, "size_filled": None, "status": "active"}
                 logger.info(f"✅ {instrument_id} Bybit entered now at {curr_price}, entry_ordId: {ord_id}")

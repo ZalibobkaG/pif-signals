@@ -76,7 +76,10 @@ async def ws_process(data: list, trades_dict: dict, bybit_trade: BybitTrade):
             logger.warning(f"{symbol!r} Bybit ws_process: no instrument_info for trade {trade_key!r}")
             continue
 
-        if len(trade["entry"]) == 1:
+        entry = trade.get("entry") if isinstance(trade.get("entry"), list) else []
+        entry = [x for x in entry if x is not None]
+
+        if len(entry) == 1:
             if trade["entry_info"]["ordId"] == order_id:
                 if order_status in ("Cancelled", "Rejected"):
                     logger.info(f"✅ {symbol} ENTRY {order_status} order {order_id}")
@@ -118,7 +121,7 @@ async def ws_process(data: list, trades_dict: dict, bybit_trade: BybitTrade):
                     await bybit_trade.place_tps_first_limit_order(trades_dict=trades_dict, instrument_id=symbol, trade_info=effective_trade_info, instrument_info=instrument_info)
                     pprint(trade, indent=2, width=80, sort_dicts=False)
 
-        elif len(trade["entry"]) == 2:
+        elif len(entry) == 2:
             if trade["entry_info"][0]["ordId"] == order_id:
                 if order_status in ("Cancelled", "Rejected"):
                     logger.info(f"✅ {symbol} ENTRY1 {order_status} order {order_id}")
