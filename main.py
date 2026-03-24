@@ -14,7 +14,8 @@ from dotenv import load_dotenv
 load_dotenv()
 from loguru import logger
 from config import BALANCE, BACKUP_INTERVAL_SECONDS, BACKUP_MAX_FILES
-from utils.tg_channel_monitor import TgChannelMonitor
+# from utils.tg_channel_monitor import TgChannelMonitor
+from utils.tg_group_topics_monitor import TgGroupTopicsMonitor
 from utils.work_with_ai import WorkWithAI
 from exchanges.okx.okx_strategy import okx_strategy_pool
 from exchanges.okx.trade import OkxTrade
@@ -79,7 +80,8 @@ async def main():
     bybit_trade = BybitTrade(api_key=bybit_api_key, api_secret=bybit_api_secret, balance=BALANCE)
 
     tg_context.user_choice_queue = user_choice_queue
-    monitor = TgChannelMonitor(messages_queue=tg_messages_queue)
+    # monitor = TgChannelMonitor(messages_queue=tg_messages_queue)
+    monitor = TgGroupTopicsMonitor(messages_queue=tg_messages_queue)
     ai = WorkWithAI(messages_queue=tg_messages_queue, ai_response_queue=ai_response_queue)
     shutdown_cb = lambda: full_shutdown(okx_ws, bybit_ws)
 
