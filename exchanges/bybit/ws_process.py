@@ -11,7 +11,12 @@ from loguru import logger
 from exchanges.bybit.trade import BybitTrade
 from tg_bot.notify import send_message
 
-from pprint import pprint
+from pprint import pformat
+
+
+def _pprint_to_log(obj) -> None:
+    """Печатает pprint-дамп в loguru, чтобы его было видно в лог-файле."""
+    logger.debug(pformat(obj, indent=2, width=80, sort_dicts=False))
 
 def _find_trade_by_order_id(trades_dict: dict, order_id: str, mapped_symbol: str):
     """Найти трейд по orderId (entry / tp / sl). Логируем странные состояния вместо падения."""
@@ -84,7 +89,9 @@ async def ws_process(data: list, trades_dict: dict, bybit_trade: BybitTrade):
                 if order_status in ("Cancelled", "Rejected"):
                     logger.info(f"✅ {symbol} ENTRY {order_status} order {order_id}")
                     trade["status"] = "cancelled"
-                    pprint(trade, indent=2, width=80, sort_dicts=False)
+                    trades_dict.pop(trade_key, None)
+                    _pprint_to_log(trade)
+                    continue
 
                 elif order_status == "PartiallyFilled":
                     logger.info(f"✅ {symbol} ENTRY {order_status} order {order_id} fill size: {cum_exec_qty}")
@@ -119,13 +126,15 @@ async def ws_process(data: list, trades_dict: dict, bybit_trade: BybitTrade):
                     logger.info(f"trade {trade}")
                     await bybit_trade.place_stop_loss_order(trades_dict=trades_dict, instrument_id=symbol, trade_info=effective_trade_info, instrument_info=instrument_info)
                     await bybit_trade.place_tps_first_limit_order(trades_dict=trades_dict, instrument_id=symbol, trade_info=effective_trade_info, instrument_info=instrument_info)
-                    pprint(trade, indent=2, width=80, sort_dicts=False)
+                    _pprint_to_log(trade)
 
         elif len(entry) == 2:
             if trade["entry_info"][0]["ordId"] == order_id:
                 if order_status in ("Cancelled", "Rejected"):
                     logger.info(f"✅ {symbol} ENTRY1 {order_status} order {order_id}")
                     trade["status"] = "cancelled"
+                    trades_dict.pop(trade_key, None)
+                    continue
 
                 elif order_status == "PartiallyFilled":
                     logger.info(f"✅ {symbol} ENTRY1 {order_status} order {order_id} fill size: {cum_exec_qty}")
@@ -156,7 +165,7 @@ async def ws_process(data: list, trades_dict: dict, bybit_trade: BybitTrade):
                             await bybit_trade.cancel_orders(trades_dict=trades_dict, instrument_id=symbol, ord_ids=tp_ids)
                     await bybit_trade.place_stop_loss_order(trades_dict=trades_dict, instrument_id=symbol, trade_info=effective_trade_info, instrument_info=instrument_info)
                     await bybit_trade.place_tps_first_limit_order(trades_dict=trades_dict, instrument_id=symbol, trade_info=effective_trade_info, instrument_info=instrument_info)
-                    pprint(trade, indent=2, width=80, sort_dicts=False)
+                    _pprint_to_log(trade)
 
             elif trade["entry_info"][1]["ordId"] == order_id:
                 if order_status in ("Cancelled", "Rejected"):
@@ -171,7 +180,9 @@ async def ws_process(data: list, trades_dict: dict, bybit_trade: BybitTrade):
                                 tp_ids.append(t["ordId"])
                         if tp_ids:
                             await bybit_trade.cancel_orders(trades_dict=trades_dict, instrument_id=symbol, ord_ids=tp_ids)
-                    pprint(trade, indent=2, width=80, sort_dicts=False)
+                    _pprint_to_log(trade)
+                    trades_dict.pop(trade_key, None)
+                    continue
 
                 elif order_status == "PartiallyFilled":
                     logger.info(f"✅ {symbol} ENTRY2 {order_status} order {order_id} fill size: {cum_exec_qty}")
@@ -204,7 +215,7 @@ async def ws_process(data: list, trades_dict: dict, bybit_trade: BybitTrade):
                             await bybit_trade.cancel_orders(trades_dict=trades_dict, instrument_id=symbol, ord_ids=tp_ids)
                     await bybit_trade.place_stop_loss_order(trades_dict=trades_dict, instrument_id=symbol, trade_info=effective_trade_info, instrument_info=instrument_info)
                     await bybit_trade.place_tps_second_limit_order(trades_dict=trades_dict, instrument_id=symbol, trade_info=effective_trade_info, instrument_info=instrument_info)
-                    pprint(trade, indent=2, width=80, sort_dicts=False)
+                    _pprint_to_log(trade)
 
         # TP handling
         if trade.get("tp_info", None) is not None:
@@ -233,6 +244,8 @@ async def ws_process(data: list, trades_dict: dict, bybit_trade: BybitTrade):
                         logger.info(f"✅✅✅ {symbol} closes all position by TP")
                         trade["status"] = "closed"
                         await send_message(f"✅ TP {symbol} — closed by TP")
+                        trades_dict.pop(trade_key, None)
+                        continue
 
             elif len(tp_list) == 2:
                 if tp_list[0].get("ordId") == order_id:
@@ -254,7 +267,7 @@ async def ws_process(data: list, trades_dict: dict, bybit_trade: BybitTrade):
                         if trade.get("sl_info", None) is not None:
                             await bybit_trade.cancel_orders(trades_dict=trades_dict, instrument_id=symbol, ord_ids=[trade["sl_info"]["ordId"]])
                         await bybit_trade.place_stop_loss_order(trades_dict=trades_dict, instrument_id=symbol, trade_info=effective_trade_info, instrument_info=instrument_info)
-                        pprint(trade, indent=2, width=80, sort_dicts=False)
+                        _pprint_to_log(trade)
                         await send_message(f"✅ TP1 {symbol} — filled")
 
                 elif tp_list[1].get("ordId") == order_id:
@@ -278,6 +291,8 @@ async def ws_process(data: list, trades_dict: dict, bybit_trade: BybitTrade):
                         logger.info(f"✅✅✅ {symbol} closes all position by TP")
                         trade["status"] = "closed"
                         await send_message(f"✅ TP2 {symbol} — closed by TP")
+                        trades_dict.pop(trade_key, None)
+                        continue
 
             elif len(tp_list) == 3:
                 if tp_list[0].get("ordId") == order_id:
@@ -300,7 +315,7 @@ async def ws_process(data: list, trades_dict: dict, bybit_trade: BybitTrade):
                             await bybit_trade.cancel_orders(trades_dict=trades_dict, instrument_id=symbol, ord_ids=[trade["sl_info"]["ordId"]])
                         await bybit_trade.place_stop_loss_order(trades_dict=trades_dict, instrument_id=symbol, trade_info=effective_trade_info, instrument_info=instrument_info)
                         await bybit_trade.stop_breakeven(trades_dict=trades_dict, instrument_id=symbol, trade_info=effective_trade_info, instrument_info=instrument_info)
-                        pprint(trade, indent=2, width=80, sort_dicts=False)
+                        _pprint_to_log(trade)
                         await send_message(f"✅ TP1 {symbol} — filled")
 
                 elif tp_list[1].get("ordId") == order_id:
@@ -323,7 +338,7 @@ async def ws_process(data: list, trades_dict: dict, bybit_trade: BybitTrade):
                             await bybit_trade.cancel_orders(trades_dict=trades_dict, instrument_id=symbol, ord_ids=[trade["sl_info"]["ordId"]])
                         await bybit_trade.place_stop_loss_order(trades_dict=trades_dict, instrument_id=symbol, trade_info=effective_trade_info, instrument_info=instrument_info)
                         await bybit_trade.stop_breakeven(trades_dict=trades_dict, instrument_id=symbol, trade_info=effective_trade_info, instrument_info=instrument_info)
-                        pprint(trade, indent=2, width=80, sort_dicts=False)
+                        _pprint_to_log(trade)
                         await send_message(f"✅ TP2 {symbol} — filled")
 
                 elif tp_list[2].get("ordId") == order_id:
@@ -347,7 +362,9 @@ async def ws_process(data: list, trades_dict: dict, bybit_trade: BybitTrade):
                         logger.info(f"✅✅✅ {symbol} closes all position by TP")
                         trade["status"] = "closed"
                         await send_message(f"✅ TP {symbol} — closed by TP")
-                        pprint(trade, indent=2, width=80, sort_dicts=False)
+                        _pprint_to_log(trade)
+                        trades_dict.pop(trade_key, None)
+                        continue
 
         # SL handling
         if trade.get("sl_info", None) is not None:
@@ -377,4 +394,6 @@ async def ws_process(data: list, trades_dict: dict, bybit_trade: BybitTrade):
                     logger.info(f"✅✅✅ {symbol} closes all position by SL")
                     trades_dict[effective_trade_info["message_id"]]["status"] = "closed"
                     await send_message(f"🛑 SL {symbol} — closed by SL")
-                    pprint(trade, indent=2, width=80, sort_dicts=False)
+                    _pprint_to_log(trade)
+                    trades_dict.pop(trade_key, None)
+                    continue
