@@ -5,11 +5,27 @@ from loguru import logger
 
 import aiohttp
 from aiogram import Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import CallbackQuery
 
 from tg_bot import context as tg_context
 
 router = Router(name="ai_confirm")
+
+
+def _callback_answer_expired(exc: TelegramBadRequest) -> bool:
+    m = (exc.message or "").lower()
+    return "query is too old" in m or "query id is invalid" in m
+
+
+async def safe_callback_answer(callback: CallbackQuery, text: str | None = None, show_alert: bool = False) -> None:
+    try:
+        await callback.answer(text=text, show_alert=show_alert)
+    except TelegramBadRequest as e:
+        if _callback_answer_expired(e):
+            logger.debug("ai_confirm: устарел callback_query, answer пропущен: %s", e.message)
+            return
+        raise
 
 
 @router.callback_query(lambda c: c.data and c.data.startswith("aic:"))
@@ -22,12 +38,12 @@ async def on_ai_confirm(callback: CallbackQuery) -> None:
     - aic:{id}:act:{name}  — выбрать другое действие и подтвердить (как post)
     """
     if not callback.data:
-        await callback.answer()
+        await safe_callback_answer(callback)
         return
 
     parts = callback.data.split(":")
     if len(parts) < 3:
-        await callback.answer()
+        await safe_callback_answer(callback)
         return
     _, callback_id, cmd, *rest = parts
 
@@ -80,7 +96,9 @@ async def on_ai_confirm(callback: CallbackQuery) -> None:
             ]
         }
         await _edit_markup(reply_markup)
-        await callback.answer("Принято" if choice == "post" else "Пропущено")
+        await safe_callback_answer(
+            callback, "Принято" if choice == "post" else "Пропущено"
+        )
 
     # 1) Подтвердить / пропустить
     if cmd in ("post", "skip"):
@@ -110,7 +128,7 @@ async def on_ai_confirm(callback: CallbackQuery) -> None:
             rows.append(row)
         reply_markup = {"inline_keyboard": rows}
         await _edit_markup(reply_markup)
-        await callback.answer("Выбери действие")
+        await safe_callback_answer(callback, "Выбери действие")
         return
 
     # 3) Выбрано другое действие: aic:{id}:act:{name}
@@ -125,4 +143,4 @@ async def on_ai_confirm(callback: CallbackQuery) -> None:
         await _finalize("post", action_label=action_label)
         return
 
-    await callback.answer()
+    await safe_callback_answer(callback)
