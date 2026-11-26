@@ -5,6 +5,8 @@ from openai import OpenAI
 
 from loguru import logger
 
+from config import AI_BASE_URL, AI_MODEL
+
 SYSTEM_PROMPT = """
 Ты получаешь сообщение из телеграм канала с торговыми сигналами от разных трейдеров. Тебе нужно обработать это сообщение и выдать
 информацию из этого сообщения (или нескольких сообщений) в формате JSON. В канале бывают несколько видов сообщений: 
@@ -49,7 +51,7 @@ class WorkWithAI:
         self,
         messages_queue: asyncio.Queue,
         api_key: str = None,
-        base_url: str = "https://api.deepseek.com",
+        base_url: str = AI_BASE_URL,
         ai_response_queue: asyncio.Queue = None,
     ):
         self.messages_queue = messages_queue
@@ -59,7 +61,7 @@ class WorkWithAI:
 
     def _sync_get_response(self, tg_message: str) -> dict:
         response = self.client.chat.completions.create(
-            model="deepseek-chat",
+            model=AI_MODEL,
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": tg_message},

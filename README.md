@@ -15,7 +15,7 @@
 | Бот управления | aiogram 3 (inline-кнопки, middleware, роутеры) |
 | Разбор сигналов | DeepSeek через OpenAI SDK, JSON mode |
 | Биржи | Bybit v5 (`pybit`), OKX (`okx`): REST + private WebSocket (`websockets`, HMAC-авторизация) |
-| Инфраструктура | loguru, python-dotenv, gzip-бэкапы состояния |
+| Инфраструктура | Docker, Docker Compose, YAML-конфиг, loguru, gzip-бэкапы состояния |
 
 ## Архитектура
 
@@ -38,7 +38,8 @@ flowchart LR
 
 ```
 main.py                 # точка входа: поднимает все задачи и очереди
-config.py               # баланс для расчёта риска, параметры бэкапов
+config.yaml             # настройки: баланс для риска, бэкапы, модель LLM (секреты — в .env)
+Dockerfile, docker-compose.yml
 utils/
   tg_group_topics_monitor.py  # чтение топиков группы, сборка тредов
   work_with_ai.py             # промпт и запросы к LLM
@@ -65,13 +66,27 @@ tg_bot/                 # aiogram: подтверждение сигналов, 
 - **Очереди вместо прямых вызовов.** Мониторинг, AI, биржи и бот развязаны: каждый компонент можно запустить и отладить отдельно, внешний брокер не нужен.
 - **Синхронные SDK бирж в `asyncio.to_thread`.** REST-вызовы не блокируют event loop, и WebSocket и бот продолжают работать.
 - **Состояние в памяти + бэкапы.** Состояние сделок периодически сохраняется в `logs/backups` (gzip, с ротацией), чтобы его можно было восстановить после сбоя.
+- **Секреты отдельно от настроек.** Ключи лежат только в `.env`, настройки — в `config.yaml`. В Docker-образ не попадает ни то ни другое: всё подключается при запуске.
 
-## Запуск
+## Запуск в Docker
+
+```bash
+cp .env.example .env                                     # ключи Telegram, LLM и бирж
+docker compose run --rm bot python utils/auth_debug.py   # один раз: вход в Telegram
+docker compose up -d --build
+docker compose logs -f
+```
+
+- Шаг входа создаёт сессию Telethon в `tg_sessions/` и пересоздаёт её, если она уже была. Если файл сессии уже есть, шаг не нужен.
+- `config.yaml`, `tg_sessions/` и `logs/` подключены как volume: настройки меняются без пересборки (`docker compose restart`), сессия и бэкапы переживают перезапуск.
+- `docker compose down` и `/stop` в боте корректно закрывают WebSocket-соединения. После `/stop` контейнер не перезапускается, после падения поднимается сам (`restart: on-failure`).
+
+## Локальный запуск
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env   # заполнить ключи Telegram, LLM и бирж
+cp .env.example .env
 python main.py         # при первом запуске Telethon запросит код входа
 ```
 

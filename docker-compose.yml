@@ -1,0 +1,18 @@
+services:
+  bot:
+    build: .
+    image: pif-signals-ai:latest
+    container_name: pif-signals-ai
+    env_file: .env
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro   # настройки, правятся без пересборки
+      - ./tg_sessions:/app/tg_sessions      # сессия Telethon переживает перезапуск
+      - ./logs:/app/logs                    # логи и бэкапы состояния
+    # on-failure: после /stop в боте контейнер не поднимается сам, после падения поднимается
+    restart: on-failure
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

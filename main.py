@@ -9,6 +9,7 @@
 
 import asyncio
 import os
+import signal
 import sys
 from dotenv import load_dotenv
 load_dotenv()
@@ -85,6 +86,14 @@ async def main():
     ai = WorkWithAI(messages_queue=tg_messages_queue, ai_response_queue=ai_response_queue)
     shutdown_cb = lambda: full_shutdown(okx_ws, bybit_ws)
 
+    # docker stop / Ctrl+C: закрываем WS и задачи так же, как по /stop в боте
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        try:
+            loop.add_signal_handler(sig, lambda: asyncio.create_task(shutdown_cb()))
+        except NotImplementedError:  # Windows
+            pass
+
     async def _run_bot():
         try:
             await tg_bot.run_with_shutdown(shutdown_cb)
@@ -102,9 +111,8 @@ async def main():
         asyncio.create_task(bybit_ws.connect_private()),
     ]
     logger.info("All tasks created (tg_bot first, then monitor, ai, okx, bybit, ws). Waiting...")
-    await asyncio.sleep(0.2)
-    
     try:
+        await asyncio.sleep(0.2)
         await asyncio.wait(tasks)
     except asyncio.CancelledError:
         pass

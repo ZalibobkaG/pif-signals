@@ -1,0 +1,17 @@
+# Секреты и локальное состояние не попадают в образ
+.env
+*.env
+tg_sessions/*
+!tg_sessions/.gitkeep
+logs/
+
+.git
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.DS_Store
+dick.py
+example_of_current_trades.py
+Dockerfile
+docker-compose.yml
