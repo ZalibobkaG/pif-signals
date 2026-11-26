@@ -1,0 +1,9 @@
+aiogram==3.22.0
+aiohttp==3.12.15
+loguru==0.7.3
+okx==2.1.2
+openai==2.16.0
+pybit==5.13.0
+python-dotenv==1.2.1
+Telethon==1.42.0
+websockets==15.0.1
