@@ -17,7 +17,7 @@ class AllowedUserMiddleware(BaseMiddleware):
         username = (user.username or "").lower()
         if ALLOWED_USERNAME and username != ALLOWED_USERNAME:
             logger.warning(f"tg_bot: доступ отклонён username={username!r} (ожидается {ALLOWED_USERNAME!r})")
-            await event.answer("â ÐÐ¾ÑÑÑÐ¿ Ð·Ð°Ð¿ÑÐµÑÑÐ½: Ð±Ð¾Ñ ÑÐ°Ð±Ð¾ÑÐ°ÐµÑ ÑÐ¾Ð»ÑÐºÐ¾ Ð´Ð»Ñ Ð²Ð»Ð°Ð´ÐµÐ»ÑÑÐ°.")
+            await event.answer("⛔ Доступ запрещён: бот работает только для владельца.")
             return
         tg_context.bot_instance = event.bot
         tg_context.allowed_chat_id = event.chat.id

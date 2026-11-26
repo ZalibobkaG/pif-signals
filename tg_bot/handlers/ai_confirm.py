@@ -1,4 +1,5 @@
 """Обработка нажатий «Выставить» / «Пропустить» по сообщению с сигналом AI."""
+from __future__ import annotations
 import os
 
 from loguru import logger

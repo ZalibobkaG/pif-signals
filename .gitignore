@@ -1,11 +1,21 @@
+# Secrets & local state
 .env
 *.env
+!.env.example
 tg_sessions/*
 !tg_sessions/.gitkeep
 logs/
+
+# Python
+.venv/
+venv/
 __pycache__/
-requirements*.txt
+*.py[cod]
+
+# Local scratch files
 example_of_current_trades.py
+dick.py
+
+# OS
 .DS_Store
 **/.DS_Store
-dick.py
